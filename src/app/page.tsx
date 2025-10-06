@@ -1,8 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { Suspense } from 'react'
 import LogoutButton from '@/components/auth/LogoutButton'
 import CreatePostForm from '@/components/post/CreatePostForm' // <-- これをインポート
+import Timeline from '@/components/post/Timeline'
 
 export default async function HomePage() {
   const cookieStore = await cookies()
@@ -28,7 +30,7 @@ export default async function HomePage() {
 
   return (
     <div className="flex flex-col items-center w-full min-h-screen bg-gray-50">
-      <header className="w-full p-4 bg-white border-b border-gray-200 flex justify-between items-center">
+      <header className="w-full p-4 bg-white border-b border-gray-200 flex justify-between items-center sticky top-0 z-10">
         <h1 className="text-xl font-bold">Com-Musics</h1>
         <div className="flex items-center space-x-4">
           <p>ようこそ、{profile?.nickname || 'ゲスト'}さん</p>
@@ -40,6 +42,9 @@ export default async function HomePage() {
         <CreatePostForm />
 
         {/* --- タイムラインは後でここに表示します --- */}
+        <Suspense fallback={<p className="mt-8">読み込み中...</p>}>
+          <Timeline />
+        </Suspense>
       </main>
     </div>
   )
