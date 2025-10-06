@@ -3,38 +3,57 @@
 import { createClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
+import { searchTracks } from '@/lib/spotify/api'
+import { type ArtistInsert, type SongInsert, type TagInsert } from '@/types'
 
+// createPost関数を以下のように変更
 export async function createPost(formData: FormData) {
   const cookieStore = await cookies()
   const supabase = createClient(cookieStore)
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'You must be logged in to post.' }
 
-  // 現在のユーザー情報を取得
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return { error: 'You must be logged in to post.' }
-  }
-
-  // フォームから投稿内容を取得
   const content = formData.get('content') as string
+  if (!content) return { error: 'Content cannot be empty.' }
 
-  if (!content) {
-    return { error: 'Content cannot be empty.' }
-  }
+  const songId = formData.get('song_id') as string | null
 
-  // Supabaseのpostsテーブルに新しいレコードを挿入
-  const { error } = await supabase
+  // 1. まず投稿(post)を作成
+  const { data: postData, error: postError } = await supabase
     .from('posts')
     .insert({ content: content, user_id: user.id })
+    .select().single()
 
-  if (error) {
-    console.error('Error creating post:', error)
+  if (postError) {
+    console.error('Error creating post:', postError)
     return { error: 'Failed to create post.' }
   }
 
-  // 投稿後にホームページのデータを再読み込みさせる
+  // 2. もし曲がタグ付けされていたら...
+  if (songId) {
+    const artistId = formData.get('artist_id') as string
+    const artistName = formData.get('artist_name') as string
+    const songName = formData.get('song_name') as string
+    const albumArtUrl = formData.get('album_art_url') as string
+
+    // 2a. 【重要】まず親であるアーティストを登録 (なければ挿入、あれば何もしない)
+    const artistToInsert: ArtistInsert = { id: artistId, name: artistName }
+    await supabase.from('artists').upsert(artistToInsert)
+
+    // 2b. 次に子である曲を登録
+    const songToInsert: SongInsert = {
+      id: songId,
+      name: songName,
+      artist_id: artistId, // 正しいartistIdを使う
+      album_art_url: albumArtUrl,
+    }
+    await supabase.from('songs').upsert(songToInsert)
+
+    // 2c. 最後に孫であるタグを登録
+    const tagToInsert: TagInsert = { post_id: postData.id, song_id: songId }
+    await supabase.from('tags').insert(tagToInsert)
+  }
+
   revalidatePath('/')
 }
 
@@ -91,3 +110,17 @@ export async function toggleLike(postId: number) {
   // 4. タイムラインのデータを再読み込み
   revalidatePath('/')
 }
+
+export async function searchMusic(query: string) {
+  if (!query) {
+    return []
+  }
+  try {
+    const results = await searchTracks(query)
+    return results
+  } catch (error) {
+    console.error('Spotify search failed:', error)
+    return []
+  }
+}
+
