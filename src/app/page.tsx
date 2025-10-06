@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import LogoutButton from '@/components/auth/LogoutButton'
+import CreatePostForm from '@/components/post/CreatePostForm' // <-- これをインポート
 
 export default async function HomePage() {
   const cookieStore = await cookies()
@@ -26,18 +27,19 @@ export default async function HomePage() {
     .single()
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen py-2 bg-gray-50">
-      <main className="flex flex-col items-center justify-center w-full flex-1 px-20 text-center">
-        <h1 className="text-4xl font-bold">
-          ようこそ、{profile?.nickname || 'ゲスト'}さん！
-        </h1>
-        <p className="mt-3 text-xl">
-          Com-Musicsのホームページです。
-        </p>
-
-        <div className="mt-8">
+    <div className="flex flex-col items-center w-full min-h-screen bg-gray-50">
+      <header className="w-full p-4 bg-white border-b border-gray-200 flex justify-between items-center">
+        <h1 className="text-xl font-bold">Com-Musics</h1>
+        <div className="flex items-center space-x-4">
+          <p>ようこそ、{profile?.nickname || 'ゲスト'}さん</p>
           <LogoutButton />
         </div>
+      </header>
+      <main className="flex flex-col items-center w-full flex-1 p-8">
+        {/* ↓↓↓ ここに投稿フォームを配置 ↓↓↓ */}
+        <CreatePostForm />
+
+        {/* --- タイムラインは後でここに表示します --- */}
       </main>
     </div>
   )
