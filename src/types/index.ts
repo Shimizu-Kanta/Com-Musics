@@ -1,44 +1,36 @@
 import { type Database } from './database'
 
-type PostRow = Database['public']['Tables']['posts']['Row']
-export type PostInsert = Database['public']['Tables']['posts']['Insert']
-
-type Profile = Database['public']['Tables']['profiles']['Row']
-
+// テーブルの基本的な型
+export type Profile = Database['public']['Tables']['profiles']['Row'] & {
+  avatar_url: string | null
+}
+export type Post = Database['public']['Tables']['posts']['Row']
 export type Like = Database['public']['Tables']['likes']['Row']
-
-export type SongRow = Database['public']['Tables']['songs']['Row']
-export type SongInsert = Database['public']['Tables']['songs']['Insert']
-
-type TagRow = Database['public']['Tables']['tags']['Row']
-export type TagInsert = Database['public']['Tables']['tags']['Insert']
-
-type ArtistRow = Database['public']['Tables']['artists']['Row']
-export type ArtistInsert = Database['public']['Tables']['artists']['Insert']
-
-// ライブ情報に関連する型
+export type Tag = Database['public']['Tables']['tags']['Row']
+export type Song = Database['public']['Tables']['songs']['Row']
+export type Artist = Database['public']['Tables']['artists']['Row']
 export type Live = Database['public']['Tables']['lives']['Row']
 export type Attendee = Database['public']['Tables']['attended_lives']['Row']
 
-// タグと、それに紐づく曲の情報を合わせた型
-export type TagWithRelations = TagRow & {
-  songs: SongRow | null
-  artists: ArtistRow | null
-  lives: Live | null
-}
+// データベース挿入用の型
+export type SongInsert = Database['public']['Tables']['songs']['Insert']
+export type ArtistInsert = Database['public']['Tables']['artists']['Insert']
+export type TagInsert = Database['public']['Tables']['tags']['Insert']
 
-export type PostWithProfile = PostRow & {
-  profiles: Pick<Profile, 'nickname' | 'user_id_text'> | null
-  likes: Like[]
-  is_liked_by_user: boolean
-  // 投稿には、曲情報を含んだタグの配列が紐づく
+// 関連テーブルの情報を含んだ、リッチな情報の型
+export type PostWithRelations = Post & {
+  profiles: Profile | null
+  likes: Pick<Like, 'user_id'>[]
   tags: TagWithRelations[]
 }
 
+export type TagWithRelations = Tag & {
+  songs: (Song & { artists: { name: string | null } | null }) | null
+  artists: Artist | null
+  lives: Live | null
+}
+
 export type LiveWithRelations = Live & {
-  artists: {
-    name: string | null
-    image_url: string | null
-  } | null
+  artists: { name: string | null; image_url: string | null } | null
   attended_lives: Pick<Attendee, 'user_id'>[]
 }
