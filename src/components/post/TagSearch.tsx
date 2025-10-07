@@ -9,6 +9,7 @@ type TrackSearchResult = {
   id: string
   name: string
   artist: string
+  artistId: string // artistIdが必須
   albumArtUrl?: string
 }
 type ArtistSearchResult = {
@@ -18,16 +19,16 @@ type ArtistSearchResult = {
 }
 type SearchResultItem = TrackSearchResult | ArtistSearchResult
 
-// 親コンポーネントに渡すタグの型
+// 親に渡すTagの型
 export type Tag = {
   type: 'song' | 'artist'
   id: string
   name: string
   imageUrl?: string
   artistName?: string
+  artistId?: string // 楽曲の場合のアーティストID
 }
 
-// 親コンポーネントから受け取る関数の型
 type TagSearchProps = {
   onTagSelect: (tag: Tag) => void
   onClose: () => void
@@ -59,27 +60,29 @@ export default function TagSearch({ onTagSelect, onClose }: TagSearchProps) {
   }
 
   const handleSelect = (item: SearchResultItem) => {
-    if (searchType === 'song') {
-      const track = item as TrackSearchResult
+    if ('artistId' in item) {
+      // item is TrackSearchResult
       onTagSelect({
         type: 'song',
-        id: track.id,
-        name: track.name,
-        artistName: track.artist,
-        imageUrl: track.albumArtUrl,
+        id: item.id,
+        name: item.name,
+        artistName: item.artist,
+        artistId: item.artistId, // artistIdをセット
+        imageUrl: item.albumArtUrl,
       })
     } else {
-      const artist = item as ArtistSearchResult
+      // item is ArtistSearchResult
       onTagSelect({
         type: 'artist',
-        id: artist.id,
-        name: artist.name,
-        imageUrl: artist.imageUrl,
+        id: item.id,
+        name: item.name,
+        imageUrl: item.imageUrl,
       })
     }
     onClose()
   }
-
+  
+  // (JSX部分は変更なし)
   return (
     <div className="absolute z-20 w-full p-4 bg-white border border-gray-300 rounded-lg shadow-xl top-full mt-2">
       <div className="flex items-center border-b pb-2 mb-2">
@@ -111,11 +114,8 @@ export default function TagSearch({ onTagSelect, onClose }: TagSearchProps) {
       <div className="mt-2 max-h-60 overflow-y-auto">
         {isPending && <p>検索中...</p>}
         <ul>
-          {/* ↓↓↓ ここのロジックを修正しました ↓↓↓ */}
-          {results.map((item) => {
-            // itemが曲かアーティストかを安全に判別します
+          {results.map((item: SearchResultItem) => {
             if ('artist' in item) {
-              // item is TrackSearchResult (曲)
               return (
                 <li key={item.id} onClick={() => handleSelect(item)} className="p-2 hover:bg-gray-100 cursor-pointer flex items-center">
                   {item.albumArtUrl && <Image src={item.albumArtUrl} alt={item.name} width={40} height={40} className="mr-3 rounded"/>}
@@ -126,7 +126,6 @@ export default function TagSearch({ onTagSelect, onClose }: TagSearchProps) {
                 </li>
               )
             } else {
-              // item is ArtistSearchResult (アーティスト)
               return (
                 <li key={item.id} onClick={() => handleSelect(item)} className="p-2 hover:bg-gray-100 cursor-pointer flex items-center">
                   {item.imageUrl && <Image src={item.imageUrl} alt={item.name} width={40} height={40} className="mr-3 rounded"/>}
