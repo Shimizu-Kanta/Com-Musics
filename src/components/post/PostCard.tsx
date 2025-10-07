@@ -1,6 +1,7 @@
 import type { PostWithProfile, TagWithRelations } from '@/types'
 import LikeButton from './LikeButton'
 import Image from 'next/image'
+import Link from 'next/link'
 
 // タグ一つ分を表示する小さなコンポーネント
 function TagBadge({ tag }: { tag: TagWithRelations }) {
@@ -33,8 +34,19 @@ function TagBadge({ tag }: { tag: TagWithRelations }) {
 
 // PostCardが受け取るpropsの型を、PostWithProfileだけにします
 export default function PostCard({ post }: { post: PostWithProfile }) {
+  const profile = post.profiles
+  if (!profile) return null
+
   return (
     <div className="w-full max-w-lg p-4 mb-4 bg-white border border-gray-200 rounded-lg shadow">
+      <Link href={`/${profile.user_id_text}`} className="block">
+        <div className="flex items-center mb-2">
+          <div>
+            <h3 className="font-bold text-gray-900 hover:underline">{profile.nickname}</h3>
+            <p className="text-sm text-gray-500">@{profile.user_id_text}</p>
+          </div>
+        </div>
+      </Link>
       <div className="flex items-center mb-2">
         <div>
           <h3 className="font-bold text-gray-900">{post.profiles?.nickname || '名無しのユーザー'}</h3>
