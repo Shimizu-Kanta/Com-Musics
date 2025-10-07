@@ -1,8 +1,9 @@
 import { Buffer } from 'buffer'
 
 interface SpotifyArtist {
-    id: string
-    name: string
+  id: string
+  name: string
+  images?: SpotifyImage[] 
 }
 
 interface SpotifyImage {
@@ -73,5 +74,31 @@ export const searchTracks = async (query: string) => {
     artist: track.artists.map((_artist: SpotifyArtist) => _artist.name).join(', '),
     artistId: track.artists[0]?.id,
     albumArtUrl: track.album.images[0]?.url,
+  }))
+}
+
+// 3. アーティストを検索する関数
+export const searchArtists = async (query: string) => {
+  const { access_token } = await getAccessToken()
+
+  const response = await fetch(
+    `${SEARCH_ENDPOINT}?q=${query}&type=artist&market=JP&limit=10`,
+    {
+      headers: {
+        Authorization: `Bearer ${access_token}`,
+      },
+    }
+  )
+
+  const data = await response.json()
+
+  if (!data.artists) {
+    return []
+  }
+
+  return data.artists.items.map((artist: SpotifyArtist) => ({
+    id: artist.id,
+    name: artist.name,
+    imageUrl: artist.images?.[0]?.url,
   }))
 }

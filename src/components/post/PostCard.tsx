@@ -1,13 +1,38 @@
-import type { PostWithProfile, SongRow } from '@/types'
+import type { PostWithProfile, TagWithRelations } from '@/types'
 import LikeButton from './LikeButton'
 import Image from 'next/image'
 
-// 受け取るpostの型を更新
-type PostCardProps = {
-  post: PostWithProfile & { song: SongRow | null }
+// タグ一つ分を表示する小さなコンポーネント
+function TagBadge({ tag }: { tag: TagWithRelations }) {
+  // タグに紐づくのが曲かアーティストかを判断
+  if (tag.songs) {
+    const song = tag.songs
+    return (
+      <div className="flex items-center bg-gray-100 rounded-lg p-2 text-sm">
+        {song.album_art_url && <Image src={song.album_art_url} alt={song.name || ''} width={24} height={24} className="mr-2 rounded-full"/>}
+        <div>
+          <span className="font-bold">{song.name}</span>
+          <span className="text-gray-500 ml-2">(楽曲)</span>
+        </div>
+      </div>
+    )
+  } else if (tag.artists) {
+    const artist = tag.artists
+    return (
+      <div className="flex items-center bg-gray-100 rounded-lg p-2 text-sm">
+        {artist.image_url && <Image src={artist.image_url} alt={artist.name || ''} width={24} height={24} className="mr-2 rounded-full"/>}
+        <div>
+          <span className="font-bold">{artist.name}</span>
+          <span className="text-gray-500 ml-2">(アーティスト)</span>
+        </div>
+      </div>
+    )
+  }
+  return null
 }
 
-export default function PostCard({ post }: PostCardProps) {
+// PostCardが受け取るpropsの型を、PostWithProfileだけにします
+export default function PostCard({ post }: { post: PostWithProfile }) {
   return (
     <div className="w-full max-w-lg p-4 mb-4 bg-white border border-gray-200 rounded-lg shadow">
       <div className="flex items-center mb-2">
@@ -18,21 +43,10 @@ export default function PostCard({ post }: PostCardProps) {
       </div>
       <p className="text-gray-800 whitespace-pre-wrap">{post.content}</p>
 
-      {/* post.songs を post.song に変更 */}
-      {post.song && (
-        <div className="mt-4 p-3 border rounded-lg flex items-center">
-          {post.song.album_art_url && (
-            <Image
-              src={post.song.album_art_url}
-              alt={post.song.name || 'album art'}
-              width={50}
-              height={50}
-              className="mr-4 rounded"
-            />
-          )}
-          <div>
-            <p className="font-bold">{post.song.name}</p>
-          </div>
+      {/* 複数タグを表示するエリア */}
+      {post.tags && post.tags.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {post.tags.map(tag => <TagBadge key={tag.id} tag={tag} />)}
         </div>
       )}
 

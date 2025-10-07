@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 import PostCard from './PostCard'
-import type { PostWithProfile, Like, SongRow, TagWithSong } from '@/types'
+import type { PostWithProfile, Like, TagWithRelations } from '@/types'
 
 export default async function Timeline() {
   const cookieStore = await cookies()
@@ -11,10 +11,10 @@ export default async function Timeline() {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // select句を修正: tagsテーブルを経由してsongsテーブルの情報を取得
+  // tagsに紐づくsongsとartistsの情報も一緒に取得します
   const { data: posts, error } = await supabase
     .from('posts')
-    .select('*, profiles(nickname, user_id_text), likes(*), tags(*, songs(*))')
+    .select('*, profiles(*), likes(*), tags(*, songs(*), artists(*))')
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -26,25 +26,14 @@ export default async function Timeline() {
     return <p>まだ投稿がありません。</p>
   }
 
-  // 取得したデータをPostCardで使いやすいように加工する
-  const typedPosts: (PostWithProfile & { song: SongRow | null })[] = posts.map(
-    (post) => {
-      // 投稿に紐づくタグの中から、曲情報(song)を持つものを探す
-      const songTag = post.tags.find((tag: TagWithSong) => tag.songs)
-      const song = songTag ? songTag.songs : null
-
-      return {
-        ...post,
-        profiles: post.profiles,
-        likes: post.likes as Like[],
-        tags: post.tags,
-        // songというプロパティを追加して、PostCardで使いやすくする
-        song: song,
-        is_liked_by_user:
-          !!user && post.likes.some((like: Like) => like.user_id === user.id),
-      }
-    }
-  )
+  // 取得したデータを、定義した型に当てはめます
+  const typedPosts: PostWithProfile[] = posts.map((post) => ({
+    ...post,
+    profiles: post.profiles,
+    likes: post.likes as Like[],
+    tags: post.tags as TagWithRelations[],
+    is_liked_by_user: !!user && post.likes.some((like: Like) => like.user_id === user.id),
+  }))
 
   return (
     <div className="w-full max-w-lg mt-8">

@@ -13,11 +13,13 @@ export type SongInsert = Database['public']['Tables']['songs']['Insert']
 type TagRow = Database['public']['Tables']['tags']['Row']
 export type TagInsert = Database['public']['Tables']['tags']['Insert']
 
+type ArtistRow = Database['public']['Tables']['artists']['Row']
 export type ArtistInsert = Database['public']['Tables']['artists']['Insert']
 
 // タグと、それに紐づく曲の情報を合わせた型
-export type TagWithSong = TagRow & {
+export type TagWithRelations = TagRow & {
   songs: SongRow | null
+  artists: ArtistRow | null
 }
 
 export type PostWithProfile = PostRow & {
@@ -25,5 +27,5 @@ export type PostWithProfile = PostRow & {
   likes: Like[]
   is_liked_by_user: boolean
   // 投稿には、曲情報を含んだタグの配列が紐づく
-  tags: TagWithSong[]
+  tags: TagWithRelations[]
 }
