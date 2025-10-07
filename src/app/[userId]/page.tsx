@@ -5,6 +5,7 @@ import { Suspense } from 'react'
 import UserTimeline from '@/components/post/UserTimeline'
 import Link from 'next/link'
 import Image from 'next/image'
+import FollowButton from '@/components/profile/FollowButton'
 import { type Database } from '@/types/database'
 
 type Song = Database['public']['Tables']['songs']['Row'] & { artists: { name: string } | null }
@@ -45,6 +46,29 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   if (error || !profile) { notFound() }
   const isMyProfile = currentUser && currentUser.id === profile.id
 
+  // フォロー数を取得
+  const { count: followingCount } = await supabase
+    .from('followers')
+    .select('*', { count: 'exact', head: true })
+    .eq('follower_id', profile.id)
+
+  // フォロワー数を取得
+  const { count: followersCount } = await supabase
+    .from('followers')
+    .select('*', { count: 'exact', head: true })
+    .eq('following_id', profile.id)
+
+  let isFollowing = false
+  if (currentUser) {
+    const { data: follow } = await supabase
+      .from('followers')
+      .select('follower_id')
+      .eq('follower_id', currentUser.id)
+      .eq('following_id', profile.id)
+      .single()
+    isFollowing = !!follow // followデータがあればtrue、なければfalse
+  }
+
   // お気に入りの曲を取得
   const { data: favoriteSongsData } = await supabase
     .from('favorite_songs')
@@ -80,14 +104,34 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
             <h1 className="text-3xl font-bold">{profile.nickname}</h1>
             <p className="text-md text-gray-600 mt-1">@{profile.user_id_text}</p>
           </div>
-          {isMyProfile && (
-            <Link href={`/${profile.user_id_text}/edit`} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
-              編集する
-            </Link>
-          )}
+          <div>
+            {isMyProfile ? (
+              <Link href={`/${profile.user_id_text}/edit`} className="px-4 py-2 text-sm font-medium border border-gray-300 rounded-full hover:bg-gray-50">
+                プロフィールを編集
+              </Link>
+            ) : (
+              // 自分のプロフィールでない場合、FollowButtonを表示
+              <FollowButton targetUserId={profile.id} isFollowing={isFollowing} />
+            )}
+          </div>
         </div>
         <p className="mt-4 text-gray-800">{profile.bio || '自己紹介がありません。'}</p>
-        
+
+        <div className="mt-4 flex space-x-4">
+          <Link href={`/${profile.user_id_text}/following`} className="hover:underline">
+            <div className="text-sm">
+              <span className="font-bold">{followingCount ?? 0}</span>
+              <span className="text-gray-500 ml-1">フォロー中</span>
+            </div>
+          </Link>
+          <Link href={`/${profile.user_id_text}/followers`} className="hover:underline">
+            <div className="text-sm">
+              <span className="font-bold">{followersCount ?? 0}</span>
+              <span className="text-gray-500 ml-1">フォロワー</span>
+            </div>
+          </Link>
+        </div>
+
         {artists.length > 0 && (
           <div className="mt-6">
             <h3 className="text-sm font-bold text-gray-600 mb-2">Favorite Artists</h3>
