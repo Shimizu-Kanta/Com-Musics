@@ -14,7 +14,7 @@ export default async function Timeline() {
   // tagsに紐づくsongsとartistsの情報も一緒に取得します
   const { data: posts, error } = await supabase
     .from('posts')
-    .select('*, profiles(*), likes(*), tags(*, songs(*), artists(*))')
+    .select('*, profiles(*), likes(*), tags(*, songs(*), artists(*), lives(*))')
     .order('created_at', { ascending: false })
 
   if (error) {

@@ -2,6 +2,7 @@ import type { PostWithProfile, TagWithRelations } from '@/types'
 import LikeButton from './LikeButton'
 import Image from 'next/image'
 import Link from 'next/link'
+import { TicketIcon } from '@heroicons/react/24/solid'
 
 // タグ一つ分を表示する小さなコンポーネント
 function TagBadge({ tag }: { tag: TagWithRelations }) {
@@ -25,6 +26,17 @@ function TagBadge({ tag }: { tag: TagWithRelations }) {
         <div>
           <span className="font-bold">{artist.name}</span>
           <span className="text-gray-500 ml-2">(アーティスト)</span>
+        </div>
+      </div>
+    )
+  } else if (tag.lives) {
+    const live = tag.lives
+    return (
+      <div className="flex items-center bg-gray-100 rounded-lg p-2 text-sm">
+        <TicketIcon className="w-5 h-5 mr-2 text-gray-500"/>
+        <div>
+          <span className="font-bold">{live.name}</span>
+          <span className="text-gray-500 ml-2">(ライブ)</span>
         </div>
       </div>
     )
