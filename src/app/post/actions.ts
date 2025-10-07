@@ -122,9 +122,39 @@ export async function createPost(formData: FormData) {
         await supabase.from('artists').upsert(artistToInsert)
         const tagToInsert: TagInsert = { post_id: postData.id, artist_id: tag.id }
         await supabase.from('tags').insert(tagToInsert)
+      } else if (tag.type === 'live') {
+        const tagToInsert: TagInsert = {
+          post_id: postData.id,
+          live_id: parseInt(tag.id, 10), // idを数値に変換
+        }
+        await supabase.from('tags').insert(tagToInsert)
       }
     }
   }
 
   revalidatePath('/')
+}
+
+// ライブ情報を検索するサーバーアクション
+export async function searchLivesAction(query: string) {
+  if (!query) return []
+  const cookieStore = await cookies()
+  const supabase = createClient(cookieStore)
+
+  const { data, error } = await supabase
+    .from('lives')
+    .select('id, name, artists(name)') // artistsテーブルからアーティスト名も取得
+    .ilike('name', `%${query}%`) // ライブ名で部分一致検索
+    .limit(10)
+
+  if (error) {
+    console.error('Error searching lives:', error)
+    return []
+  }
+
+  return data.map(live => ({
+    id: live.id.toString(), // idを文字列に変換
+    name: live.name,
+    artist: live.artists?.[0]?.name ?? 'アーティスト未登録',
+  }))
 }

@@ -24,6 +24,7 @@ export type Attendee = Database['public']['Tables']['attended_lives']['Row']
 export type TagWithRelations = TagRow & {
   songs: SongRow | null
   artists: ArtistRow | null
+  lives: Live | null
 }
 
 export type PostWithProfile = PostRow & {
