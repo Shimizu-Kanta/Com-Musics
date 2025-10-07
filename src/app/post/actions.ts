@@ -3,8 +3,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
-import { searchTracks } from '@/lib/spotify/api'
+import { searchTracks, searchArtists } from '@/lib/spotify/api'
 import { type ArtistInsert, type SongInsert, type TagInsert } from '@/types'
+import { type Tag } from '@/components/post/TagSearch'
 
 // createPost関数を以下のように変更
 export async function createPost(formData: FormData) {
@@ -15,8 +16,10 @@ export async function createPost(formData: FormData) {
 
   const content = formData.get('content') as string
   if (!content) return { error: 'Content cannot be empty.' }
-
-  const songId = formData.get('song_id') as string | null
+  
+  // 'tags'というキーで送られてきたJSON文字列を取得
+  const tagsJson = formData.get('tags') as string
+  const tags: Tag[] = JSON.parse(tagsJson) // JSON文字列をオブジェクトの配列に戻す
 
   // 1. まず投稿(post)を作成
   const { data: postData, error: postError } = await supabase
@@ -29,29 +32,39 @@ export async function createPost(formData: FormData) {
     return { error: 'Failed to create post.' }
   }
 
-  // 2. もし曲がタグ付けされていたら...
-  if (songId) {
-    const artistId = formData.get('artist_id') as string
-    const artistName = formData.get('artist_name') as string
-    const songName = formData.get('song_name') as string
-    const albumArtUrl = formData.get('album_art_url') as string
+  // 2. もしタグがあれば、一つずつ処理してデータベースに保存
+  if (tags && tags.length > 0) {
+    for (const tag of tags) {
+      if (tag.type === 'song') {
+        // --- 楽曲タグの処理 ---
+        const artist = { id: tag.artistName!, name: tag.artistName! } // 仮のアーティスト情報
+        // 2a. アーティストを登録
+        await supabase.from('artists').upsert({id: artist.id, name: artist.name})
 
-    // 2a. 【重要】まず親であるアーティストを登録 (なければ挿入、あれば何もしない)
-    const artistToInsert: ArtistInsert = { id: artistId, name: artistName }
-    await supabase.from('artists').upsert(artistToInsert)
+        // 2b. 曲を登録
+        const songToInsert: SongInsert = {
+          id: tag.id,
+          name: tag.name,
+          artist_id: artist.id,
+          album_art_url: tag.imageUrl,
+        }
+        await supabase.from('songs').upsert(songToInsert)
 
-    // 2b. 次に子である曲を登録
-    const songToInsert: SongInsert = {
-      id: songId,
-      name: songName,
-      artist_id: artistId, // 正しいartistIdを使う
-      album_art_url: albumArtUrl,
+        // 2c. タグを登録
+        const tagToInsert: TagInsert = { post_id: postData.id, song_id: tag.id }
+        await supabase.from('tags').insert(tagToInsert)
+
+      } else if (tag.type === 'artist') {
+        // --- アーティストタグの処理 ---
+        // 2a. アーティストを登録
+        const artistToInsert: ArtistInsert = { id: tag.id, name: tag.name, image_url: tag.imageUrl }
+        await supabase.from('artists').upsert(artistToInsert)
+        
+        // 2b. タグを登録
+        const tagToInsert: TagInsert = { post_id: postData.id, artist_id: tag.id }
+        await supabase.from('tags').insert(tagToInsert)
+      }
     }
-    await supabase.from('songs').upsert(songToInsert)
-
-    // 2c. 最後に孫であるタグを登録
-    const tagToInsert: TagInsert = { post_id: postData.id, song_id: songId }
-    await supabase.from('tags').insert(tagToInsert)
   }
 
   revalidatePath('/')
@@ -120,6 +133,19 @@ export async function searchMusic(query: string) {
     return results
   } catch (error) {
     console.error('Spotify search failed:', error)
+    return []
+  }
+}
+
+export async function searchArtistsAction(query: string) {
+  if (!query) {
+    return []
+  }
+  try {
+    const results = await searchArtists(query)
+    return results
+  } catch (error) {
+    console.error('Spotify artist search failed:', error)
     return []
   }
 }
