@@ -32,10 +32,11 @@ export type Tag = {
 type TagSearchProps = {
   onTagSelect: (tag: Tag) => void
   onClose: () => void
+  searchOnly?: 'song' | 'artist' 
 }
 
-export default function TagSearch({ onTagSelect, onClose }: TagSearchProps) {
-  const [searchType, setSearchType] = useState<'song' | 'artist'>('song')
+export default function TagSearch({ onTagSelect, onClose, searchOnly }: TagSearchProps) {
+  const [searchType, setSearchType] = useState<'song' | 'artist'>(searchOnly || 'song')
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResultItem[]>([])
   const [isPending, startTransition] = useTransition()
@@ -87,22 +88,24 @@ export default function TagSearch({ onTagSelect, onClose }: TagSearchProps) {
     <div className="absolute z-20 w-full p-4 bg-white border border-gray-300 rounded-lg shadow-xl top-full mt-2">
       <div className="flex items-center border-b pb-2 mb-2">
         <button type="button" onClick={onClose} className="mr-4 text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
-        <div>
-          <button
-            type="button"
-            onClick={() => setSearchType('song')}
-            className={`px-3 py-1 text-sm rounded-full ${searchType === 'song' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}
-          >
-            楽曲
-          </button>
-          <button
-            type="button"
-            onClick={() => setSearchType('artist')}
-            className={`px-3 py-1 text-sm rounded-full ml-2 ${searchType === 'artist' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}
-          >
-            アーティスト
-          </button>
-        </div>
+        {!searchOnly && (
+          <div>
+            <button
+              type="button"
+              onClick={() => setSearchType('song')}
+              className={`px-3 py-1 text-sm rounded-full ${searchType === 'song' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}
+            >
+              楽曲
+            </button>
+            <button
+              type="button"
+              onClick={() => setSearchType('artist')}
+              className={`px-3 py-1 text-sm rounded-full ml-2 ${searchType === 'artist' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}
+            >
+              アーティスト
+            </button>
+          </div>
+        )}
       </div>
       <input
         type="text"

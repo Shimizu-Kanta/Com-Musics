@@ -16,6 +16,17 @@ type ProfilePageProps = {
   }
 }
 
+type AttendedLive = {
+  lives: {
+    id: number;
+    name: string;
+    live_date: string | null;
+    artists: {
+      name: string | null;
+    } | null;
+  } | null;
+}
+
 export default async function ProfilePage({ params }: ProfilePageProps) {
   const { userId } = params
   if (!userId) { notFound() }
@@ -48,6 +59,15 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     .from('favorite_artists')
     .select('artists(*)')
     .eq('user_id', profile.id)
+
+    // ユーザーが参戦したライブの情報を取得
+  const { data: attendedLivesData } = await supabase
+    .from('attended_lives')
+    .select('lives(*, artists(name))') // attended_livesから、関連するlivesとartistsの情報を取得
+    .eq('user_id', profile.id)
+    .order('live_date', { referencedTable: 'lives', ascending: false, nullsFirst: false })
+  
+  const attendedLives = attendedLivesData as AttendedLive[] | null
 
   // .mapを.flatMapに変更して、リストの入れ子を解消します
   const artists: Artist[] = favoriteArtistsData?.flatMap(fav => fav.artists).filter((a): a is Artist => a !== null) || []
@@ -101,6 +121,24 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       </header>
 
       <main className="w-full flex-1">
+        {/* 参戦したライブ一覧 */}
+        <div className="py-8">
+          <h2 className="text-xl font-bold px-4 mb-4">参戦したライブ</h2>
+          <div className="space-y-2">
+            {attendedLives && attendedLives.length > 0 ? (
+              attendedLives.map(item => item.lives && (
+                <div key={item.lives.id} className="p-4 hover:bg-gray-50 rounded-md">
+                  <p className="text-sm text-gray-500">{item.lives.live_date}</p>
+                  <h3 className="font-bold text-gray-800">{item.lives.name}</h3>
+                  <p className="text-sm text-gray-600">{item.lives.artists?.name}</p>
+                </div>
+              ))
+            ) : (
+              <p className="px-4 text-sm text-gray-500">まだ参戦したライブはありません。</p>
+            )}
+          </div>
+        </div>
+
         <div className="w-full max-w-lg mx-auto mt-8">
           <h2 className="text-xl font-bold px-4 mb-4">投稿一覧</h2>
           <Suspense fallback={<p className="p-4">読み込み中...</p>}>
