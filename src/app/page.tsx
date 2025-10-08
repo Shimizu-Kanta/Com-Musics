@@ -2,7 +2,6 @@ import { createClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
-import LogoutButton from '@/components/auth/LogoutButton'
 import CreatePostForm from '@/components/post/CreatePostForm' // <-- これをインポート
 import Timeline from '@/components/post/Timeline'
 
@@ -21,22 +20,8 @@ export default async function HomePage() {
     redirect('/login')
   }
 
-  // ユーザーが存在する場合のみ、プロフィールを取得してページを表示します。
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('nickname')
-    .eq('id', user.id)
-    .single()
-
   return (
     <div className="flex flex-col items-center w-full min-h-screen bg-gray-50">
-      <header className="w-full p-4 bg-white border-b border-gray-200 flex justify-between items-center sticky top-0 z-10">
-        <h1 className="text-xl font-bold">Com-Musics</h1>
-        <div className="flex items-center space-x-4">
-          <p>ようこそ、{profile?.nickname || 'ゲスト'}さん</p>
-          <LogoutButton />
-        </div>
-      </header>
       <main className="flex flex-col items-center w-full flex-1 p-8">
         {/* ↓↓↓ ここに投稿フォームを配置 ↓↓↓ */}
         <CreatePostForm />
