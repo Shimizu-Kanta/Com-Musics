@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { type PostWithRelations } from '@/types'
 import PostCard from '@/components/post/PostCard'
 import TimelineTabs from '@/components/post/TimelineTabs'
+import CreatePostForm from '@/components/post/CreatePostForm'
 
 type HomePageProps = {
   searchParams: {
@@ -77,6 +78,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   return (
     <div className="w-full max-w-lg mx-auto">
+      <CreatePostForm />
       <TimelineTabs />
       <div className="mt-4">
         {errorMessage ? (
