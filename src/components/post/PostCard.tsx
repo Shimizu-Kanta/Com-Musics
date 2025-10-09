@@ -59,12 +59,7 @@ export default function PostCard({ post }: { post: PostWithProfile }) {
           </div>
         </div>
       </Link>
-      <div className="flex items-center mb-2">
-        <div>
-          <h3 className="font-bold text-gray-900">{post.profiles?.nickname || '名無しのユーザー'}</h3>
-          <p className="text-sm text-gray-500">@{post.profiles?.user_id_text || 'unknown_user'}</p>
-        </div>
-      </div>
+
       <p className="text-gray-800 whitespace-pre-wrap">{post.content}</p>
 
       {/* 複数タグを表示するエリア */}
