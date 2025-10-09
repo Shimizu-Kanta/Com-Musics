@@ -1,12 +1,10 @@
-import type { PostWithRelations, TagWithRelations } from '@/types'
+import type { PostWithRelations, TagWithRelations } from '@/types' // PostWithProfile を PostWithRelations に修正
 import LikeButton from './LikeButton'
 import Image from 'next/image'
 import Link from 'next/link'
 import { TicketIcon, UserCircleIcon } from '@heroicons/react/24/solid'
 
-// タグ一つ分を表示する小さなコンポーネント
 function TagBadge({ tag }: { tag: TagWithRelations }) {
-  // タグに紐づくのが曲かアーティストかを判断
   if (tag.songs) {
     const song = tag.songs
     return (
@@ -14,7 +12,8 @@ function TagBadge({ tag }: { tag: TagWithRelations }) {
         {song.album_art_url && <Image src={song.album_art_url} alt={song.name || ''} width={24} height={24} className="mr-2 rounded-full"/>}
         <div>
           <span className="font-bold">{song.name}</span>
-          <span className="text-gray-500 ml-2">(楽曲)</span>
+          {/* artistsがnullの場合も考慮 */}
+          <span className="text-gray-500 ml-2">({song.artists?.name || 'Unknown Artist'})</span>
         </div>
       </div>
     )
@@ -44,15 +43,17 @@ function TagBadge({ tag }: { tag: TagWithRelations }) {
   return null
 }
 
-// PostCardが受け取るpropsの型を、PostWithProfileだけにします
+// ▼▼▼【ここからが今回の唯一の修正点です】▼▼▼
+// PostCardが受け取るpropsの型を、PostWithRelationsに修正します
 export default function PostCard({ post }: { post: PostWithRelations }) {
+// ▲▲▲
   const profile = post.profiles
   if (!profile) return null
 
   return (
     <div className="w-full max-w-lg p-4 mb-4 bg-white border border-gray-200 rounded-lg shadow">
       <Link href={`/${profile.user_id_text}`} className="block">
-          {/* profile.avatar_url があればImageコンポーネントで表示し、なければUserCircleIconを表示します */}
+        <div className="flex items-center mb-2">
           {profile.avatar_url ? (
             <Image 
               src={profile.avatar_url} 
@@ -64,8 +65,6 @@ export default function PostCard({ post }: { post: PostWithRelations }) {
           ) : (
             <UserCircleIcon className="w-10 h-10 text-gray-400 mr-3" />
           )}
-
-        <div className="flex items-center mb-2">
           <div>
             <h3 className="font-bold text-gray-900 hover:underline">{profile.nickname}</h3>
             <p className="text-sm text-gray-500">@{profile.user_id_text}</p>
@@ -75,7 +74,6 @@ export default function PostCard({ post }: { post: PostWithRelations }) {
 
       <p className="text-gray-800 whitespace-pre-wrap">{post.content}</p>
 
-      {/* 複数タグを表示するエリア */}
       {post.tags && post.tags.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
           {post.tags.map((tag: TagWithRelations) => <TagBadge key={tag.id} tag={tag} />)}
