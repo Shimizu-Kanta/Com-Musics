@@ -1,3 +1,4 @@
+//Import
 import { createClient } from '@/lib/supabase/server'
 import { type PostWithRelations } from '@/types'
 import PostCard from '@/components/post/PostCard'
