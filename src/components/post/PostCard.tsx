@@ -2,7 +2,7 @@ import type { PostWithRelations, TagWithRelations } from '@/types'
 import LikeButton from './LikeButton'
 import Image from 'next/image'
 import Link from 'next/link'
-import { TicketIcon } from '@heroicons/react/24/solid'
+import { TicketIcon, UserCircleIcon } from '@heroicons/react/24/solid'
 
 // タグ一つ分を表示する小さなコンポーネント
 function TagBadge({ tag }: { tag: TagWithRelations }) {
@@ -52,6 +52,19 @@ export default function PostCard({ post }: { post: PostWithRelations }) {
   return (
     <div className="w-full max-w-lg p-4 mb-4 bg-white border border-gray-200 rounded-lg shadow">
       <Link href={`/${profile.user_id_text}`} className="block">
+          {/* profile.avatar_url があればImageコンポーネントで表示し、なければUserCircleIconを表示します */}
+          {profile.avatar_url ? (
+            <Image 
+              src={profile.avatar_url} 
+              alt={profile.nickname || 'avatar'} 
+              width={40} 
+              height={40} 
+              className="rounded-full mr-3"
+            />
+          ) : (
+            <UserCircleIcon className="w-10 h-10 text-gray-400 mr-3" />
+          )}
+
         <div className="flex items-center mb-2">
           <div>
             <h3 className="font-bold text-gray-900 hover:underline">{profile.nickname}</h3>
