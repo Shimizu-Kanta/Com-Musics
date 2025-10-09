@@ -1,4 +1,4 @@
-import type { PostWithProfile, TagWithRelations } from '@/types'
+import type { PostWithRelations, TagWithRelations } from '@/types'
 import LikeButton from './LikeButton'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -45,7 +45,7 @@ function TagBadge({ tag }: { tag: TagWithRelations }) {
 }
 
 // PostCardが受け取るpropsの型を、PostWithProfileだけにします
-export default function PostCard({ post }: { post: PostWithProfile }) {
+export default function PostCard({ post }: { post: PostWithRelations }) {
   const profile = post.profiles
   if (!profile) return null
 
@@ -65,7 +65,7 @@ export default function PostCard({ post }: { post: PostWithProfile }) {
       {/* 複数タグを表示するエリア */}
       {post.tags && post.tags.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
-          {post.tags.map(tag => <TagBadge key={tag.id} tag={tag} />)}
+          {post.tags.map((tag: TagWithRelations) => <TagBadge key={tag.id} tag={tag} />)}
         </div>
       )}
 
