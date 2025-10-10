@@ -15,13 +15,12 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   let posts: PostWithRelations[] = []
 
   if (query) {
-    // Step 1: 作成したデータベース関数(RPC)を呼び出して、一致する投稿IDを取得
     const { data: postIdsData } = await supabase.rpc('search_posts', { search_term: query })
 
     if (postIdsData && postIdsData.length > 0) {
-      const postIds = postIdsData.map(p => p.id)
+      // ▼▼▼【重要】ここで p の型を (p: { id: number }) と明示的に指定します ▼▼▼
+      const postIds = postIdsData.map((p: { id: number }) => p.id)
       
-      // Step 2: 取得した投稿IDに一致する、完全な投稿データを取得
       const { data: searchResults } = await supabase
         .from('posts')
         .select('*, profiles(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*))')

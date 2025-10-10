@@ -6,7 +6,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { MusicalNoteIcon, PlusIcon } from '@heroicons/react/24/solid'
 
-// 型定義
+// 型定義は変更ありません
 type TrackSearchResult = { id: string; name: string; artist: string; artistId: string; albumArtUrl?: string }
 type ArtistSearchResult = { id: string; name: string; imageUrl?: string }
 type LiveSearchResult = { id: string; name: string; artist: string }
@@ -21,6 +21,7 @@ export type Tag = {
   artistId?: string
 }
 
+// ▼▼▼【重要】Propsの型定義だけ、元のコードの'searchOnly'に合わせます ▼▼▼
 type TagSearchProps = {
   onTagSelect: (tag: Tag) => void
   onClose: () => void
@@ -28,6 +29,7 @@ type TagSearchProps = {
 }
 
 export default function TagSearch({ onTagSelect, onClose, searchOnly }: TagSearchProps) {
+  // ▼▼▼【重要】searchTypeの初期値を、searchOnlyの値に応じて設定します ▼▼▼
   const [searchType, setSearchType] = useState<'song' | 'artist' | 'live'>(searchOnly || 'song')
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResultItem[]>([])
@@ -45,28 +47,23 @@ export default function TagSearch({ onTagSelect, onClose, searchOnly }: TagSearc
     })
   }
 
-  // ▼▼▼ ここからが修正点 (handleSelectのロジック) ▼▼▼
+  // (handleSelectとリスト表示のロジックは、あなたの元のコードのままです)
   const handleSelect = (item: SearchResultItem) => {
-    // 1. 最もユニークな 'artistId' を持つ 曲(Song) を最初にチェック
     if ('artistId' in item) { 
       onTagSelect({ type: 'song', id: item.id, name: item.name, artistName: item.artist, artistId: item.artistId, imageUrl: item.albumArtUrl })
-    // 2. 次に、曲とライブだけが持つ 'artist' プロパティをチェックし、残ったものが ライブ(Live)
     } else if ('artist' in item) { 
       onTagSelect({ type: 'live', id: item.id, name: item.name, artistName: item.artist })
-    // 3. 上記のいずれでもなければ、それは アーティスト(Artist)
     } else { 
       onTagSelect({ type: 'artist', id: item.id, name: item.name, imageUrl: item.imageUrl })
     }
     onClose()
   }
-  // ▲▲▲ ここまで ▲▲▲
-
 
   return (
     <div className="absolute z-20 w-full p-4 bg-white border border-gray-300 rounded-lg shadow-xl top-full mt-2">
-      {/* (検索UIの上部は変更なし) */}
       <div className="flex items-center border-b pb-2 mb-2">
         <button type="button" onClick={onClose} className="mr-4 text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+        {/* ▼▼▼【重要】searchOnlyが指定されている場合は、タブ切り替えを非表示にします ▼▼▼ */}
         {!searchOnly && (
           <div>
             <button type="button" onClick={() => setSearchType('song')} className={`px-3 py-1 text-sm rounded-full ${searchType === 'song' ? 'bg-indigo-600 text-white' : 'bg-gray-200'}`}>楽曲</button>
@@ -87,9 +84,7 @@ export default function TagSearch({ onTagSelect, onClose, searchOnly }: TagSearc
 
         {!isPending && results.length > 0 && (
           <ul>
-            {/* ▼▼▼ ここからが修正点 (リスト表示のロジック) ▼▼▼ */}
             {results.map((item) => {
-              // 上のhandleSelectと同じ、より厳密なロジックで分岐させる
               if ('artistId' in item) { // Song
                 return (
                   <li key={item.id} onClick={() => handleSelect(item)} className="p-2 hover:bg-gray-100 cursor-pointer flex items-center">
@@ -128,7 +123,6 @@ export default function TagSearch({ onTagSelect, onClose, searchOnly }: TagSearc
                 )
               }
             })}
-            {/* ▲▲▲ ここまで ▲▲▲ */}
           </ul>
         )}
         
