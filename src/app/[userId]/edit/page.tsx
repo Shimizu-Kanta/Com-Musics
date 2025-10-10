@@ -5,16 +5,10 @@ import { type Tag } from '@/components/post/TagSearch'
 import { type Profile } from '@/types'
 import { type Database } from '@/types/database'
 
-// ▼▼▼【重要】Next.jsが期待する、最もシンプルなPropsの型定義に修正します ▼▼▼
-type Props = {
-  params: { userId: string }
-  searchParams: { [key: string]: string | string[] | undefined }
-}
-
 type SongFromDB = Database['public']['Tables']['songs']['Row'] & { artists: { id: string, name:string | null } | null }
 type ArtistFromDB = Database['public']['Tables']['artists']['Row']
 
-export default async function EditProfilePage({ params }: Props) {
+export default async function EditProfilePage({ params }: { params: { userId: string } }) {
   const { userId } = params
   const supabase = createClient()
 
