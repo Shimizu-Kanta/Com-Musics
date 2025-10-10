@@ -18,8 +18,7 @@ export function createClient() {
             // 同様に、内部で 'cookies()' を呼び出して 'await' します
             (await cookies()).set({ name, value, ...options })
           } catch (error) {
-            // Server Componentから呼ばれた場合はエラーが発生することがありますが、
-            // middlewareでセッションを更新していれば無視して問題ありません。
+            void error
           }
         },
         // remove関数も 'async' に変更します
@@ -28,7 +27,7 @@ export function createClient() {
             // 同様に、内部で 'cookies()' を呼び出して 'await' します
             (await cookies()).set({ name, value: '', ...options })
           } catch (error) {
-            // Server Componentから呼ばれた場合はエラーが発生することがありますが、無視して問題ありません。
+            void error
           }
         },
       },

@@ -1,6 +1,6 @@
 'use client'
 
-import { searchMusic, searchArtistsAction, searchLivesAction } from '@/app/post/actions'
+import { searchMusic, searchArtistsAction, searchLivesAction } from '@/app/(main)/post/actions'
 import { useState, useTransition } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'

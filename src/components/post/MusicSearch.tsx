@@ -1,6 +1,6 @@
 'use client'
 
-import { searchMusic } from '@/app/post/actions'
+import { searchMusic } from '@/app/(main)/post/actions'
 import { useState, useTransition } from 'react'
 import Image from 'next/image'
 

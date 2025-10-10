@@ -1,6 +1,6 @@
 'use client'
 
-import { toggleFollow } from '@/app/[userId]/actions'
+import { toggleFollow } from '@/app/(main)/[userId]/actions'
 import { useTransition } from 'react'
 
 type FollowButtonProps = {
