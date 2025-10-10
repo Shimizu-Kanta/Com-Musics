@@ -1,19 +1,31 @@
-import type { Metadata } from "next";
-//import "./globals.css";
+import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
+// @ts-expect-error - Next.js allows importing CSS files directly
+import './globals.css'
+import Header from '@/components/layout/Header'
+
+const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: "Com-Musics",
-  description: "A social network for music lovers.",
-};
+  title: 'Com-Musics',
+  description: 'Your music community',
+}
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: {
+  children: React.ReactNode
+}) {
   return (
     <html lang="ja">
-      <body>{children}</body>
+      <body className={inter.className}>
+        <Header />
+        
+        {/* ▼▼▼【重要】ここに min-h-screen を移動させます ▼▼▼ */}
+        <main className="flex flex-col items-center w-full min-h-screen">
+          {children}
+        </main>
+      </body>
     </html>
-  );
+  )
 }

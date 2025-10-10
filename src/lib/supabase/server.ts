@@ -1,29 +1,34 @@
-import { type CookieOptions, createServerClient } from '@supabase/ssr'
-import { type cookies } from 'next/headers'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
-// 引数の型を Awaited<...> で囲みます。
-// これにより、「cookies()をawaitした後の、実際のデータ」を期待するようになります。
-export function createClient(cookieStore: Awaited<ReturnType<typeof cookies>>) {
+export function createClient() {
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
+        // get関数を 'async' に変更します
+        async get(name: string) {
+          // この関数の内部で 'cookies()' を呼び出し、'await' します
+          return (await cookies()).get(name)?.value
         },
-        set(name: string, value: string, options: CookieOptions) {
+        // set関数も 'async' に変更します
+        async set(name: string, value: string, options: CookieOptions) {
           try {
-            cookieStore.set({ name, value, ...options })
+            // 同様に、内部で 'cookies()' を呼び出して 'await' します
+            (await cookies()).set({ name, value, ...options })
           } catch (error) {
-            // サーバーコンポーネントから呼ばれた場合のエラーは無視してOK
+            // Server Componentから呼ばれた場合はエラーが発生することがありますが、
+            // middlewareでセッションを更新していれば無視して問題ありません。
           }
         },
-        remove(name: string, options: CookieOptions) {
+        // remove関数も 'async' に変更します
+        async remove(name: string, options: CookieOptions) {
           try {
-            cookieStore.set({ name, value: '', ...options })
+            // 同様に、内部で 'cookies()' を呼び出して 'await' します
+            (await cookies()).set({ name, value: '', ...options })
           } catch (error) {
-            // サーバーコンポーネントから呼ばれた場合のエラーは無視してOK
+            // Server Componentから呼ばれた場合はエラーが発生することがありますが、無視して問題ありません。
           }
         },
       },
