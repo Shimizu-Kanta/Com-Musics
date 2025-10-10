@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import Header from '@/components/layout/Header'
+import Header from '@/components/layout/Header' // Headerだけをインポートします
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -18,9 +18,9 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body className={inter.className}>
+        {/* ▼▼▼【重要】ヘッダーの呼び出しを、この一行だけにします ▼▼▼ */}
         <Header />
-        
-        {/* ▼▼▼【重要】ここに min-h-screen を移動させます ▼▼▼ */}
+
         <main className="flex flex-col items-center w-full min-h-screen">
           {children}
         </main>
