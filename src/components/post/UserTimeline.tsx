@@ -1,12 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
-import { cookies } from 'next/headers'
 import PostCard from './PostCard'
-import type { PostWithProfile, Like, TagWithRelations } from '@/types'
+import type { PostWithRelations, Like, TagWithRelations } from '@/types'
 
 // このコンポーネントは、表示したいユーザーのID（UUID形式）を受け取ります
 export default async function UserTimeline({ userId }: { userId: string }) {
-  const cookieStore = await cookies()
-  const supabase = createClient(cookieStore)
+  const supabase = createClient()
 
   const {
     data: { user: currentUser }, // ログイン中のユーザー情報をcurrentUserとして取得
@@ -29,7 +27,7 @@ export default async function UserTimeline({ userId }: { userId: string }) {
   }
 
   // 取得したデータを、PostCardで使える形に整える
-  const typedPosts: PostWithProfile[] = posts.map((post) => ({
+  const typedPosts: PostWithRelations[] = posts.map((post) => ({
     ...post,
     profiles: post.profiles,
     likes: post.likes as Like[],

@@ -24,6 +24,7 @@ export type PostWithRelations = Post & {
   profiles: Profile | null
   likes: Pick<Like, 'user_id'>[]
   tags: TagWithRelations[]
+  is_liked_by_user: boolean
 }
 export type LiveWithRelations = Live & {
   artists: { name:string | null; image_url: string | null } | null

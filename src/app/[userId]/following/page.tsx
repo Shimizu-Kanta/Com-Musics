@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { cookies } from 'next/headers'
 import { notFound } from 'next/navigation'
 import UserCard from '@/components/profile/UserCard'
 import Link from 'next/link'
@@ -12,8 +11,7 @@ type FollowingPageProps = {
 }
 
 export default async function FollowingPage({ params }: FollowingPageProps) {
-  const cookieStore = await cookies()
-  const supabase = createClient(cookieStore)
+  const supabase = createClient()
 
   const { data: profile } = await supabase
     .from('profiles')

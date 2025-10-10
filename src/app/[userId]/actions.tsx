@@ -1,13 +1,11 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 
 // フォロー状態を切り替える関数
 export async function toggleFollow(targetUserId: string) {
-  const cookieStore = await cookies()
-  const supabase = createClient(cookieStore)
+  const supabase = createClient()
 
   // 1. ログイン中のユーザー情報を取得
   const {

@@ -1,12 +1,12 @@
 'use client'
 
 import { toggleLike } from '@/app/post/actions'
-import type { PostWithProfile } from '@/types'
+import type { PostWithRelations } from '@/types'
 import { HeartIcon } from '@heroicons/react/24/outline' // いいねしてない時のアイコン
 import { HeartIcon as SolidHeartIcon } from '@heroicons/react/24/solid' // いいねした時のアイコン
 
 // いいねボタンの見た目を定義
-export default function LikeButton({ post }: { post: PostWithProfile }) {
+export default function LikeButton({ post }: { post: PostWithRelations }) {
   // いいねボタンが押された時の処理
   const handleLike = async () => {
     // サーバーアクションを呼び出す

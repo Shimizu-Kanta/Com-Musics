@@ -1,6 +1,6 @@
 'use server'
 
-import { cookies, headers } from 'next/headers'
+import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 
@@ -15,8 +15,7 @@ export async function signUp(formData: FormData) {
   const userIdText = formData.get('user_id_text') as string
   const birthday = formData.get('birthday') as string
 
-  const cookieStore = await cookies()
-  const supabase = createClient(cookieStore)
+  const supabase = createClient()
 
   const { error } = await supabase.auth.signUp({
     email,
@@ -40,8 +39,7 @@ export async function signUp(formData: FormData) {
 }
 
 export async function signOut() {
-  const cookieStore = await cookies()
-  const supabase = createClient(cookieStore)
+  const supabase = createClient()
   await supabase.auth.signOut()
   return redirect('/login')
 }

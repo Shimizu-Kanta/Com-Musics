@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { searchTracks, searchArtists } from '@/lib/spotify/api'
 import { type ArtistInsert, type SongInsert, type TagInsert } from '@/types'
@@ -33,8 +32,7 @@ export async function searchArtistsAction(query: string) {
 
 // toggleLike関数 (変更なし)
 export async function toggleLike(postId: number) {
-  const cookieStore = await cookies()
-  const supabase = createClient(cookieStore)
+  const supabase = createClient()
 
   // 1. ログイン中のユーザー情報を取得
   const {
@@ -70,8 +68,7 @@ export async function toggleLike(postId: number) {
 
 // createPost関数 (ここを最終版に修正)
 export async function createPost(formData: FormData) {
-  const cookieStore = await cookies()
-  const supabase = createClient(cookieStore)
+  const supabase = createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -138,8 +135,7 @@ export async function createPost(formData: FormData) {
 // ライブ情報を検索するサーバーアクション
 export async function searchLivesAction(query: string) {
   if (!query) return []
-  const cookieStore = await cookies()
-  const supabase = createClient(cookieStore)
+  const supabase = createClient()
 
   const { data, error } = await supabase
     .from('lives')

@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
-// @ts-expect-error - Next.js allows importing CSS files directly
 import './globals.css'
 import Header from '@/components/layout/Header'
 
