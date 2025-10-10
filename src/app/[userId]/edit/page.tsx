@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import EditProfileForm from '@/components/profile/EditProfileForm'
 import { type Tag } from '@/components/post/TagSearch'
-import { type Profile, type Song, type Artist } from '@/types'
+import { type Profile} from '@/types'
 import { type Database } from '@/types/database'
 
 // 参照コードで使われていた、より正確な型定義を導入します
