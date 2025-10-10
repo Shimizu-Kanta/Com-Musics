@@ -1,61 +1,64 @@
 'use client'
 
-import { type LiveWithRelations } from '@/types'
+import { useState } from 'react'
 import Image from 'next/image'
-import { toggleAttendance } from '@/app/live/actions'
-import { useTransition } from 'react'
+import Link from 'next/link'
+import AttendButton from './AttendButton'
+import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/solid'
 
-export default function LiveCard({ live, currentUserId }: { live: LiveWithRelations; currentUserId?: string }) {
-  const [isPending, startTransition] = useTransition()
+type Live = { id: number; live_date: string | null; isAttended: boolean; }
+type Venues = { [venueName: string]: Live[]; }
+type LiveCardProps = {
+  liveName: string;
+  artistId: string | null; // artistId を受け取る
+  artistName: string | null;
+  artistImageUrl: string | null;
+  venues: Venues;
+  userLoggedIn: boolean;
+}
 
-  // 自分が参加しているかどうか
-  const isAttending = currentUserId ? live.attended_lives.some((attendee) => attendee.user_id === currentUserId) : false
-  // 参加人数
-  const attendeeCount = live.attended_lives.length
-
-  const handleAttendClick = () => {
-    if (!currentUserId) {
-      alert('参加するにはログインが必要です。')
-      return
-    }
-    startTransition(() => {
-      toggleAttendance(live.id)
-    })
-  }
+export default function LiveCard({ liveName, artistId, artistName, artistImageUrl, venues, userLoggedIn }: LiveCardProps) {
+  const [isOpen, setIsOpen] = useState(false)
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-md p-4">
-      <div className="flex items-start space-x-4">
-        {live.artists?.image_url && (
-          <Image
-            src={live.artists.image_url}
-            alt={live.artists.name ?? 'Artist image'}
-            width={64}
-            height={64}
-            className="rounded-md object-cover"
-          />
-        )}
-        <div className="flex-1">
-          <p className="text-sm text-gray-500">{live.live_date}</p>
-          <h2 className="text-lg font-bold">{live.name}</h2>
-          {live.artists && <p className="text-md font-medium text-gray-700">{live.artists.name}</p>}
-          {live.venue && <p className="text-sm text-gray-600">@{live.venue}</p>}
+    <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
+      <button onClick={() => setIsOpen(!isOpen)} className="w-full flex items-center justify-between text-left">
+        <div className="flex items-center">
+          {artistImageUrl && <Image src={artistImageUrl} alt={artistName || ''} width={40} height={40} className="rounded-full mr-3" />}
+          <div>
+            <h2 className="text-xl font-bold">{liveName}</h2>
+            <p className="text-sm text-gray-500">{artistName}</p>
+          </div>
         </div>
-      </div>
-      <div className="mt-4 flex justify-between items-center">
-        <p className="text-sm text-gray-500">{attendeeCount}人が参戦</p>
-        <button
-          onClick={handleAttendClick}
-          disabled={isPending}
-          className={`px-4 py-2 text-sm font-bold rounded-full ${
-            isAttending
-              ? 'bg-red-100 text-red-700 hover:bg-red-200'
-              : 'bg-indigo-600 text-white hover:bg-indigo-700'
-          } disabled:opacity-50`}
-        >
-          {isPending ? '処理中...' : isAttending ? '取り消し' : '参戦した！'}
-        </button>
-      </div>
+        {isOpen ? <ChevronUpIcon className="w-6 h-6 text-gray-500" /> : <ChevronDownIcon className="w-6 h-6 text-gray-500" />}
+      </button>
+
+      {isOpen && (
+        <div className="mt-4 pl-4 border-l-2 border-gray-100">
+          {Object.entries(venues).map(([venueName, dates]) => (
+            <div key={venueName} className="mt-2 pl-2">
+              <h3 className="font-semibold">{venueName}</h3>
+              <div className="mt-1 space-y-2 pl-4">
+                {dates.map(date => (
+                  <div key={date.id} className="flex justify-between items-center">
+                    <p className="text-sm">{date.live_date}</p>
+                    {userLoggedIn && <AttendButton liveId={date.id} isInitiallyAttended={date.isAttended} />}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div className="mt-4 pt-4 border-t border-dashed">
+            {/* ▼▼▼ リンクに artistId と artistName を追加します ▼▼▼ */}
+            <Link 
+              href={`/live/new?name=${encodeURIComponent(liveName)}&artistId=${encodeURIComponent(artistId || '')}&artistName=${encodeURIComponent(artistName || '')}`}
+              className="text-sm font-semibold text-indigo-600 hover:text-indigo-800"
+            >
+              + このツアーに公演を追加する
+            </Link>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
