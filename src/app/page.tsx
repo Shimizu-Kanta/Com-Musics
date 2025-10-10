@@ -7,9 +7,7 @@ import { type Database } from '@/types/database'
 
 // page.tsxが受け取るPropsの型定義
 type EditProfilePageProps = {
-  params: {
-    userId: string
-  }
+  params: Promise<{ userId: string }>
 }
 
 // DBから取得するデータの型を定義
@@ -18,7 +16,7 @@ type ArtistFromDB = Database['public']['Tables']['artists']['Row']
 
 // ▼▼▼【重要】'NextPage'などを使わず、単純な'async function'として定義します ▼▼▼
 export default async function EditProfilePage({ params }: EditProfilePageProps) {
-  const { userId } = params
+  const { userId } = await params
   const supabase = createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
