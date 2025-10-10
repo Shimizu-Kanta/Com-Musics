@@ -8,7 +8,12 @@ import { type Database } from '@/types/database'
 type SongFromDB = Database['public']['Tables']['songs']['Row'] & { artists: { id: string, name:string | null } | null }
 type ArtistFromDB = Database['public']['Tables']['artists']['Row']
 
-export default async function EditProfilePage({ params }: { params: { userId: string } }) {
+export default async function EditProfilePage({
+  params,
+}: {
+  params: { userId: string }
+  searchParams: { [key: string]: string | string[] | undefined }
+}) {
   const { userId } = params
   const supabase = createClient()
 
