@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { updateProfile } from '@/app/[userId]/edit/actions'
+import { updateProfile } from '@/app/(main)/[userId]/edit/actions'
 import { UserCircleIcon, PhotoIcon, ArrowLeftIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/solid'
 import { type Profile } from '@/types'
 import TagSearch, { type Tag } from '@/components/post/TagSearch'

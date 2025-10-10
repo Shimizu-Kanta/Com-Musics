@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useActionState } from 'react'
 import { useFormStatus } from 'react-dom'
-import { createLive } from '@/app/live/actions'
+import { createLive } from '@/app/(main)/live/actions'
 import TagSearch, { type Tag } from '@/components/post/TagSearch'
 import Image from 'next/image'
 

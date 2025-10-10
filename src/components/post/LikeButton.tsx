@@ -1,6 +1,6 @@
 'use client'
 
-import { toggleLike } from '@/app/post/actions'
+import { toggleLike } from '@/app/(main)/post/actions'
 import type { PostWithRelations } from '@/types'
 import { HeartIcon } from '@heroicons/react/24/outline' // いいねしてない時のアイコン
 import { HeartIcon as SolidHeartIcon } from '@heroicons/react/24/solid' // いいねした時のアイコン

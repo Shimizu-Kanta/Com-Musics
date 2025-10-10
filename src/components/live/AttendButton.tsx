@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { toggleAttendance } from '@/app/live/actions' // 修正した 'toggleAttendance' をインポート
+import { toggleAttendance } from '@/app/(main)/live/actions' // 修正した 'toggleAttendance' をインポート
 import { PlusCircleIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
 
 type AttendButtonProps = {

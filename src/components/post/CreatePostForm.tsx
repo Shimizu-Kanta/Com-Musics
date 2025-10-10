@@ -1,6 +1,6 @@
 'use client'
 
-import { createPost } from '@/app/post/actions'
+import { createPost } from '@/app/(main)/post/actions'
 import { useRef, useState } from 'react'
 import TagSearch, { type Tag } from './TagSearch'
 import Image from 'next/image'
