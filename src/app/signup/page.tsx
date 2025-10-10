@@ -1,51 +1,58 @@
-import { signUp } from '@/app/auth/actions'
-import Link from 'next/link'
+import { createClient } from '@/lib/supabase/server'
+import { type PostWithRelations } from '@/types'
+import PostCard from '@/components/post/PostCard'
 
-export default function SignupPage({
+type SearchParams = {
+  q?: string
+}
+
+export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: { message: string }
+  // Next.js 15: searchParams は Promise で渡る
+  searchParams: Promise<SearchParams>
 }) {
+  const { q } = await searchParams
+  const query = q ?? ''
+  const supabase = createClient()
+
+  let posts: PostWithRelations[] = []
+
+  if (query) {
+    // Postgres function: search_posts(search_term text) → returns setof record(id int)
+    const { data: postIdsData } = await supabase.rpc('search_posts', {
+      search_term: query,
+    })
+
+    if (postIdsData && postIdsData.length > 0) {
+      // no-explicit-any を避けるため、戻り値の要素型を明示
+      const postIds = postIdsData.map((p: { id: number }) => p.id)
+
+      const { data: searchResults } = await supabase
+        .from('posts')
+        .select(
+          '*, profiles(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*))'
+        )
+        .in('id', postIds)
+        .order('created_at', { ascending: false })
+
+      posts = searchResults ?? []
+    }
+  }
+
   return (
-    <div className="flex justify-center items-center h-screen bg-gray-100">
-      <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-lg shadow-lg">
-        <h2 className="text-2xl font-bold text-center text-gray-900">
-          アカウントを作成
-        </h2>
-
-        <form className="space-y-6" action={signUp}>
-          <div>
-            <label htmlFor="nickname" className="block text-sm font-medium text-gray-700">ニックネーム</label>
-            <input id="nickname" name="nickname" type="text" required className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
-          </div>
-          <div>
-            <label htmlFor="user_id_text" className="block text-sm font-medium text-gray-700">ユーザーID</label>
-            <input id="user_id_text" name="user_id_text" type="text" required pattern="^[a-zA-Z0-9_]+$" title="半角英数字とアンダースコア(_)のみ使用できます" className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
-          </div>
-          <div>
-            <label htmlFor="birthday" className="block text-sm font-medium text-gray-700">生年月日</label>
-            <input id="birthday" name="birthday" type="date" required className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
-          </div>
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">メールアドレス</label>
-            <input id="email" name="email" type="email" autoComplete="email" required className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
-          </div>
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">パスワード</label>
-            <input id="password" name="password" type="password" autoComplete="current-password" required minLength={6} className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"/>
-          </div>
-          <div>
-            <button type="submit" className="w-full px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">登録する</button>
-          </div>
-        </form>
-
-        {searchParams?.message && (
-          <p className="p-4 mt-4 text-center bg-gray-100 text-gray-800">{searchParams.message}</p>
+    <div className="w-full max-w-lg mx-auto py-8 px-4">
+      <h1 className="mb-6 text-2xl font-bold">
+        検索結果: <span className="text-indigo-600">{query}</span>
+      </h1>
+      <div>
+        {posts.length > 0 ? (
+          posts.map((post) => <PostCard key={post.id} post={post} />)
+        ) : (
+          <p className="text-center text-gray-500">
+            {query ? '投稿が見つかりませんでした。' : '検索キーワードを入力してください。'}
+          </p>
         )}
-        <p className="mt-4 text-sm text-center">
-            アカウントをお持ちですか？{' '}
-            <Link href="/login" className="font-medium text-indigo-600 hover:text-indigo-500">ログイン</Link>
-        </p>
       </div>
     </div>
   )
