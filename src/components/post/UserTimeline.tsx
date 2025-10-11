@@ -10,12 +10,15 @@ export default async function UserTimeline({ userId }: { userId: string }) {
     data: { user: currentUser }, // ログイン中のユーザー情報をcurrentUserとして取得
   } = await supabase.auth.getUser()
 
-  // 投稿をデータベースから取得
+  // ▼▼▼【重要】ここのselect文を修正し、タグの関連情報を全て取得します ▼▼▼
   const { data: posts, error } = await supabase
     .from('posts')
-    .select('*, profiles(*), likes(*), tags(*, songs(*), artists(*))')
-    .eq('user_id', userId) // .select() の後に絞り込み条件を指定
+    .select(
+      '*, profiles(*), likes(*), tags(*, songs(*, artists(*)), artists(*), lives(*))'
+    )
+    .eq('user_id', userId)
     .order('created_at', { ascending: false })
+  // ▲▲▲
 
   if (error) {
     console.error('Error fetching user posts:', error)
@@ -27,12 +30,12 @@ export default async function UserTimeline({ userId }: { userId: string }) {
   }
 
   // 取得したデータを、PostCardで使える形に整える
+  // (ここのロジックは変更ありません)
   const typedPosts: PostWithRelations[] = posts.map((post) => ({
     ...post,
     profiles: post.profiles,
     likes: post.likes as Like[],
     tags: post.tags as TagWithRelations[],
-    // ログイン中のユーザーが「いいね」しているかどうかの判定
     is_liked_by_user: !!currentUser && post.likes.some((like: Like) => like.user_id === currentUser.id),
   }))
 
