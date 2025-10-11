@@ -7,7 +7,6 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { TicketIcon, UserCircleIcon, XMarkIcon } from '@heroicons/react/24/solid' // XMarkIconを追加
 
-// ▼▼▼【ここからが今回の追加機能の本体です】▼▼▼
 // 各サブスクサイトへのリンクを表示するモーダルコンポーネント
 function MusicLinkModal({ tag, onClose }: { tag: TagWithRelations; onClose: () => void }) {
   let searchTerm = '';
@@ -131,7 +130,6 @@ function TagBadge({ tag }: { tag: TagWithRelations }) {
     </>
   );
 }
-// ▲▲▲【ここまでが今回の主な修正点です】▲▲▲
 
 export default function PostCard({ post }: { post: PostWithRelations }) {
   const profile = post.profiles
