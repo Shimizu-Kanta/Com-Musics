@@ -15,6 +15,8 @@ type FavoriteArtistRow = { artists: Artist | null }
 type FollowingRow = { following_id: string }
 type TagRow = { post_id: number }
 
+export const dynamic = 'force-dynamic'
+
 export default async function HomePage({
   searchParams,
 }: {

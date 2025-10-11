@@ -33,6 +33,8 @@ type AttendedLivesJoinRow =
 type FavoriteSongRow = { songs: Song | null }
 type FavoriteArtistRow = { artists: Artist | null }
 
+export const dynamic = 'force-dynamic'
+
 export default async function ProfilePage({
   params,
 }: {

@@ -10,6 +10,8 @@ type SongFromDB = Database['public']['Tables']['songs']['Row'] & {
 }
 type ArtistFromDB = Database['public']['Tables']['artists']['Row']
 
+export const dynamic = 'force-dynamic'
+
 export default async function EditProfilePage({
   params,
 }: {
