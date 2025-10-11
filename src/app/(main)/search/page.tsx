@@ -3,31 +3,41 @@ import { type PostWithRelations } from '@/types'
 import PostCard from '@/components/post/PostCard'
 import SearchBar from '@/components/shared/SearchBar' // SearchBarをインポート
 
-type SearchPageProps = {
-  searchParams: {
-    q?: string
-  }
+type SearchParams = {
+  q?: string
 }
 
-export default async function SearchPage({ searchParams }: SearchPageProps) {
-  const query = searchParams.q || ''
+export default async function SearchPage({
+  searchParams,
+}: {
+  // Next.js 15: searchParams は Promise で渡る
+  searchParams: Promise<SearchParams>
+}) {
+  const { q } = await searchParams
+  const query = q ?? ''
   const supabase = createClient()
-  
+
   let posts: PostWithRelations[] = []
 
   if (query) {
-    const { data: postIdsData } = await supabase.rpc('search_posts', { search_term: query })
+    // Postgres function: search_posts(search_term text) → returns setof record(id int)
+    const { data: postIdsData } = await supabase.rpc('search_posts', {
+      search_term: query,
+    })
 
     if (postIdsData && postIdsData.length > 0) {
+      // no-explicit-any を避けるため、戻り値の要素型を明示
       const postIds = postIdsData.map((p: { id: number }) => p.id)
-      
+
       const { data: searchResults } = await supabase
         .from('posts')
-        .select('*, profiles(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)))')
+        .select(
+          '*, profiles(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*))'
+        )
         .in('id', postIds)
         .order('created_at', { ascending: false })
-      
-      posts = searchResults || []
+
+      posts = searchResults ?? []
     }
   }
 
