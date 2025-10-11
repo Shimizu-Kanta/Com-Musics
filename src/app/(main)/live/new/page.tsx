@@ -6,6 +6,8 @@ function LiveFormFallback() {
   return <p>読み込み中...</p>
 }
 
+export const dynamic = 'force-dynamic'
+
 export default async function NewLivePage() {
   // ▼▼▼【重要】ここからが追加部分です ▼▼▼
   const supabase = createClient()
