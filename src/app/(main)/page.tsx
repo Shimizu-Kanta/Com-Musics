@@ -29,7 +29,7 @@ export default async function HomePage({
 
   // 関連をまとめて取得する SELECT 句
   const selectStatement =
-    '*, profiles(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*))'
+    '*, profiles(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)))'
 
   if (type === 'all') {
     const { data: allPosts } = await supabase
