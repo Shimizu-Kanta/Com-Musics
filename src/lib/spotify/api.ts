@@ -60,6 +60,7 @@ export const searchTracks = async (query: string) => {
     {
       headers: {
         Authorization: `Bearer ${access_token}`,
+        'Accept-Language': 'ja-JP, ja;q=0.9',
       },
     }
   )
@@ -86,6 +87,7 @@ export const searchArtists = async (query: string) => {
     {
       headers: {
         Authorization: `Bearer ${access_token}`,
+        'Accept-Language': 'ja-JP, ja;q=0.9',
       },
     }
   )
