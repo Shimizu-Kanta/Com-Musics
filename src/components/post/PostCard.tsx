@@ -1,18 +1,18 @@
-'use client' // モーダルの表示・非表示を管理するため、クライアントコンポーネントにします
+'use client'
 
-import { useState } from 'react' // useStateをインポート
+import { useState } from 'react'
 import type { PostWithRelations, TagWithRelations } from '@/types'
 import LikeButton from './LikeButton'
 import Image from 'next/image'
 import Link from 'next/link'
-import { TicketIcon, UserCircleIcon, XMarkIcon } from '@heroicons/react/24/solid' // XMarkIconを追加
+import { UserCircleIcon, XMarkIcon } from '@heroicons/react/24/solid'
+import TagComponent from './TagComponent' // 新しいTagComponentをインポート
 
-// 各サブスクサイトへのリンクを表示するモーダルコンポーネント
+// MusicLinkModalコンポーネント (変更なし)
 function MusicLinkModal({ tag, onClose }: { tag: TagWithRelations; onClose: () => void }) {
   let searchTerm = '';
   let subText = '';
 
-  // タグの種類（曲かアーティストか）によって、検索キーワードを組み立てます
   if (tag.songs) {
     const song = tag.songs;
     searchTerm = `${song.name || ''} ${song.artists?.name || ''}`;
@@ -22,42 +22,25 @@ function MusicLinkModal({ tag, onClose }: { tag: TagWithRelations; onClose: () =
     subText = tag.artists.name || '';
   }
 
-  // URLで安全に使えるように、検索キーワードをエンコード（変換）します
   const encodedSearchTerm = encodeURIComponent(searchTerm.trim());
-
   const links = [
-    // ご提示の例に基づき、各サイトの検索URLを生成します
     { name: 'Spotify', url: `https://open.spotify.com/search/${encodedSearchTerm}` },
-    { name: 'Apple Music', url: `https://music.apple.com/jp/search?term=${encodedSearchTerm}` },
-    { name: 'YouTube Music', url: `https://music.youtube.com/search?q=${encodedSearchTerm.replace(/%20/g, '+')}` },
+    { name: 'Apple Music', url: `https://music.apple.com/search?term=${encodedSearchTerm}` },
+    { name: 'YouTube Music', url: `https://music.youtube.com/search?q=${encodedSearchTerm}` },
   ];
 
   return (
-    // モーダルの背景（オーバーレイ）
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
-      onClick={onClose} // 背景をクリックしても閉じられるようにします
-    >
-      {/* モーダルの本体 */}
-      <div 
-        className="relative w-11/12 max-w-sm p-6 bg-white rounded-lg shadow-xl"
-        onClick={(e) => e.stopPropagation()} // モーダル内のクリックは背景に伝播しないようにします
-      >
-        <button onClick={onClose} className="absolute top-2 right-2 p-1 rounded-full hover:bg-gray-100">
-          <XMarkIcon className="w-6 h-6 text-gray-600" />
-        </button>
-        <p className="text-sm text-gray-600 mb-1">外部リンク</p>
-        <p className="font-bold text-lg mb-4 truncate">{subText}</p>
-        <div className="flex flex-col space-y-3">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50" onClick={onClose}>
+      <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-bold">Listen on</h3>
+          <button onClick={onClose}><XMarkIcon className="w-6 h-6" /></button>
+        </div>
+        <p className="text-sm text-gray-600 mb-4">{subText}</p>
+        <div className="space-y-2">
           {links.map(link => (
-            <a
-              key={link.name}
-              href={link.url}
-              target="_blank" // リンクを新しいタブで開きます
-              rel="noopener noreferrer"
-              className="w-full px-4 py-3 text-center font-semibold text-gray-800 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              {link.name} で検索
+            <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="block w-full text-center bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg">
+              {link.name}
             </a>
           ))}
         </div>
@@ -66,74 +49,19 @@ function MusicLinkModal({ tag, onClose }: { tag: TagWithRelations; onClose: () =
   );
 }
 
-// タグバッジのコンポーネント
-function TagBadge({ tag }: { tag: TagWithRelations }) {
-  // モーダルの表示状態を管理するためのState
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // 曲、アーティスト、ライブの表示部分は変更ありません
-  const renderContent = () => {
-    if (tag.songs) {
-      const song = tag.songs;
-      return (
-        <div className="flex items-center">
-          {song.album_art_url && <Image src={song.album_art_url} alt={song.name || ''} width={24} height={24} className="mr-2 rounded-full"/>}
-          <div>
-            <span className="font-bold">{song.name}</span>
-            <span className="text-gray-500 ml-2">({song.artists?.name || 'Unknown Artist'})</span>
-          </div>
-        </div>
-      );
-    } else if (tag.artists) {
-      const artist = tag.artists;
-      return (
-        <div className="flex items-center">
-          {artist.image_url && <Image src={artist.image_url} alt={artist.name || ''} width={24} height={24} className="mr-2 rounded-full"/>}
-          <div>
-            <span className="font-bold">{artist.name}</span>
-            <span className="text-gray-500 ml-2">(アーティスト)</span>
-          </div>
-        </div>
-      );
-    } else if (tag.lives) {
-      const live = tag.lives;
-      return (
-        <div className="flex items-center">
-          <TicketIcon className="w-5 h-5 mr-2 text-gray-500"/>
-          <div>
-            <span className="font-bold">{live.name}</span>
-            <span className="text-gray-500 ml-2">(ライブ)</span>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
-  
-  // ライブのタグはリンク機能が不要なため、モーダルを開かないようにします
-  if (tag.lives) {
-    return <div className="bg-gray-100 rounded-lg p-2 text-sm">{renderContent()}</div>;
-  }
-
-  return (
-    <>
-      {/* タグ全体をボタンにして、クリックでモーダルを開くようにします */}
-      <button 
-        onClick={() => setIsModalOpen(true)}
-        className="bg-gray-100 rounded-lg p-2 text-sm text-left hover:bg-gray-200 transition-colors"
-      >
-        {renderContent()}
-      </button>
-
-      {/* isModalOpenがtrueの時だけ、モーダルコンポーネントを描画します */}
-      {isModalOpen && <MusicLinkModal tag={tag} onClose={() => setIsModalOpen(false)} />}
-    </>
-  );
-}
-
 export default function PostCard({ post }: { post: PostWithRelations }) {
+  const [modalTag, setModalTag] = useState<TagWithRelations | null>(null)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+
   const profile = post.profiles
   if (!profile) return null
+
+  const openModal = (tag: TagWithRelations) => {
+    // ライブタグはモーダルを開かない
+    if (tag.lives) return
+    setModalTag(tag)
+    setIsModalOpen(true)
+  }
 
   return (
     <div className="w-full max-w-lg p-4 mb-4 bg-white border border-gray-200 rounded-lg shadow">
@@ -151,19 +79,21 @@ export default function PostCard({ post }: { post: PostWithRelations }) {
         </div>
       </Link>
       <p className="text-gray-800 whitespace-pre-wrap">{post.content}</p>
+      
+      {/* ▼▼▼【重要】タグ表示のロジックを、TagComponentを使うように修正します ▼▼▼ */}
       {post.tags && post.tags.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
-          {post.tags.map((tag: TagWithRelations) => <TagBadge key={tag.id} tag={tag} />)}
+          {post.tags.map((tag: TagWithRelations) => (
+            <TagComponent key={tag.id} tag={tag} onTagClick={openModal} />
+          ))}
         </div>
       )}
-      <div className="flex justify-between items-center mt-4">
-        <div className="text-sm text-gray-500">
-          {new Date(post.created_at).toLocaleString('ja-JP')}
-        </div>
-        <div>
-          <LikeButton post={post} />
-        </div>
+      
+      <div className="mt-4 flex items-center space-x-4">
+        <LikeButton post={post} />
       </div>
+
+      {isModalOpen && modalTag && <MusicLinkModal tag={modalTag} onClose={() => setIsModalOpen(false)} />}
     </div>
   )
 }

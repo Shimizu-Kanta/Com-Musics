@@ -10,11 +10,11 @@ export default async function UserTimeline({ userId }: { userId: string }) {
     data: { user: currentUser }, // ログイン中のユーザー情報をcurrentUserとして取得
   } = await supabase.auth.getUser()
 
-  // ▼▼▼【重要】ここのselect文を修正し、タグの関連情報を全て取得します ▼▼▼
+  // ▼▼▼【重要】ここのselect文を修正し、ライブに紐づくアーティスト情報も取得します ▼▼▼
   const { data: posts, error } = await supabase
     .from('posts')
     .select(
-      '*, profiles(*), likes(*), tags(*, songs(*, artists(*)), artists(*), lives(*))'
+      '*, profiles(*), likes(*), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)))'
     )
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
@@ -30,7 +30,6 @@ export default async function UserTimeline({ userId }: { userId: string }) {
   }
 
   // 取得したデータを、PostCardで使える形に整える
-  // (ここのロジックは変更ありません)
   const typedPosts: PostWithRelations[] = posts.map((post) => ({
     ...post,
     profiles: post.profiles,

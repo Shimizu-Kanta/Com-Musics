@@ -134,23 +134,20 @@ export async function createPost(formData: FormData) {
 
 // ライブ情報を検索するサーバーアクション
 export async function searchLivesAction(query: string) {
+  'use server'
   if (!query) return []
   const supabase = createClient()
-
+  
+  // artistsテーブルと結合し、関連するアーティスト名も一緒に取得します
   const { data, error } = await supabase
     .from('lives')
-    .select('id, name, artists(name)') // artistsテーブルからアーティスト名も取得
-    .ilike('name', `%${query}%`) // ライブ名で部分一致検索
+    .select('*, artists(name)') // artists(name) を追加
+    .ilike('name', `%${query}%`)
     .limit(10)
 
   if (error) {
     console.error('Error searching lives:', error)
     return []
   }
-
-  return data.map(live => ({
-    id: live.id.toString(), // idを文字列に変換
-    name: live.name,
-    artist: live.artists?.[0]?.name ?? 'アーティスト未登録',
-  }))
+  return data || []
 }
