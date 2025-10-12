@@ -21,7 +21,7 @@ export default function RootLayout({
         {/* ▼▼▼【重要】ヘッダーの呼び出しを、この一行だけにします ▼▼▼ */}
         <Header />
 
-        <main className="flex flex-col items-center w-full min-h-screen">
+        <main className="col-span-1 md:col-span-3 flex flex-col items-center w-full min-h-screen bg-gray-50 md:border-l border-gray-200">
           {children}
         </main>
       </body>
