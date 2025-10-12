@@ -191,7 +191,7 @@ export default async function ProfilePage({
             <h1 className="text-2xl font-bold">{profile.nickname}</h1>
             <p className="text-md text-gray-500">@{profile.user_id_text}</p>
           </div>
-          <p className="mt-2 text-gray-800">
+          <p className="mt-2 text-gray-800 whitespace-pre-wrap break-words">
             {profile.bio || '自己紹介がありません。'}
           </p>
 
