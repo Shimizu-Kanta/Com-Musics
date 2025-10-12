@@ -5,6 +5,8 @@ import PostCard from '@/components/post/PostCard'
 import Tab from '@/components/post/Tab'
 import CreatePostForm from '@/components/post/CreatePostForm'
 
+export const dynamic = 'force-dynamic'
+
 type SearchParams = {
   tab?: 'all' | 'following'
   artistId?: string
