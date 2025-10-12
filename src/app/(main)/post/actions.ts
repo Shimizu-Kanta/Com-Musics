@@ -51,7 +51,7 @@ export async function toggleLike(postId: number) {
 export async function createPost(content: string, tags: Tag[]) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user || !content.trim()) {
+  if (!user || !content.trim() || content.length > 600) {
     return
   }
 

@@ -62,6 +62,7 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
               placeholder="いまどうしてる？"
               className="w-full p-2 text-lg border-none focus:ring-0 resize-none"
               rows={3}
+              maxLength={600} 
             />
 
             {tags.length > 0 && (
@@ -97,15 +98,17 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
                 )}
               </div>
 
-              <button
-                type="submit"
-                // ▼▼▼【重要】isPendingがtrueの間、ボタンを無効化します ▼▼▼
-                disabled={!content.trim() || isPending}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-full disabled:bg-indigo-300"
-              >
-                {/* ▼▼▼【重要】処理中はボタンのテキストを変更します ▼▼▼ */}
-                {isPending ? '投稿中...' : '投稿する'}
-              </button>
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-gray-500">
+                  {content.length} / 600
+                </span>
+                <button
+                  type="submit"
+                  disabled={!content.trim() || isPending}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-full disabled:bg-indigo-300">
+                  {isPending ? '投稿中...' : '投稿する'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
