@@ -29,7 +29,6 @@ export const dynamic = 'force-dynamic'
 export default async function LivePage({
   searchParams,
 }: {
-  // Next.js 15: searchParams は Promise で渡る
   searchParams: Promise<{ q?: string }>
 }) {
   const { q } = await searchParams
@@ -39,50 +38,92 @@ export default async function LivePage({
   const {
     data: { user },
   } = await supabase.auth.getUser()
+  
+  let lives: Live[] = []
+  
+  // ▼▼▼【重要】ここからが今回の主な修正点です ▼▼▼
+  try {
+    if (query) {
+      // 1. 検索クエリに一致するアーティストのIDを探す
+      const { data: artistIdsData } = await supabase
+        .from('artists')
+        .select('id')
+        .ilike('name', `%${query}%`);
+      const artistIds = artistIdsData?.map(a => a.id) ?? [];
 
-  // lives + artists を取得（昇順）
-  let queryBuilder = supabase
-    .from('lives')
-    .select('*, artists(id, name, image_url)')
-    .order('live_date', { ascending: true })
+      // 2. ライブ名が直接クエリに一致するライブのIDを探す
+      const { data: liveIdsFromNameData } = await supabase
+        .from('lives')
+        .select('id')
+        .ilike('name', `%${query}%`);
+      const liveIdsFromName = liveIdsFromNameData?.map(l => l.id) ?? [];
+      
+      // 3. アーティストIDに一致するライブのIDを探す (artist_idカラムを検索)
+      let liveIdsFromArtist: number[] = [];
+      if (artistIds.length > 0) {
+        const { data: liveIdsFromArtistData } = await supabase
+          .from('lives')
+          .select('id')
+          .in('artist_id', artistIds);
+        liveIdsFromArtist = liveIdsFromArtistData?.map(l => l.id) ?? [];
+      }
 
-  if (query) {
-    // ライブ名/アーティスト名の部分一致検索
-    queryBuilder = queryBuilder.or(
-      `name.ilike.%${query}%,artists.name.ilike.%${query}%`,
-    )
+      // 4. 全てのライブIDを統合し、重複を削除
+      const allLiveIds = Array.from(new Set([...liveIdsFromName, ...liveIdsFromArtist]));
+
+      // 5. 最終的なライブの情報を取得して返す
+      if (allLiveIds.length > 0) {
+        const { data, error } = await supabase
+          .from('lives')
+          .select('*, artists(id, name, image_url)')
+          .in('id', allLiveIds)
+          .order('name', { ascending: true })
+          .order('live_date', { ascending: true });
+        if (error) throw error;
+        lives = data as Live[] || [];
+      }
+    } else {
+      // 検索クエリがない場合は、全てのライブを取得
+      const { data, error } = await supabase
+        .from('lives')
+        .select('*, artists(id, name, image_url)')
+        .order('name', { ascending: true })
+        .order('live_date', { ascending: true });
+      if (error) throw error;
+      lives = data as Live[] || [];
+    }
+  } catch (error) {
+    console.error('Error fetching lives:', error);
+    lives = []; 
   }
+  // ▲▲▲
 
-  const { data: livesData } = await queryBuilder
-  const lives: Live[] = (livesData as Live[] | null) ?? []
+  const attendedLives =
+    user?.id
+      ? (
+          await supabase
+            .from('attended_lives')
+            .select('live_id')
+            .eq('user_id', user.id)
+        ).data?.map((row) => row.live_id) ?? []
+      : []
 
-  // ユーザーがログインしていれば参加済みライブIDを取得
-  let attendedLiveIds: number[] = []
-  if (user) {
-    const { data: attendedData } = await supabase
-      .from('attended_lives')
-      .select('live_id')
-      .eq('user_id', user.id)
-
-    attendedLiveIds = attendedData ? attendedData.map((a) => a.live_id) : []
-  }
-
-  // ライブ名 → 会場ごとに日付をグルーピング
-  const groupedLives = lives.reduce<GroupedLives>((acc, live) => {
-    const liveName = live.name || '不明なライブ'
-    const artistId = live.artists?.id ?? null
-    const artistName = live.artists?.name ?? '不明なアーティスト'
-    const artistImageUrl = live.artists?.image_url ?? null
-    const venueName = live.venue || '不明な会場'
-    const isAttended = attendedLiveIds.includes(live.id)
+  const groupedLives = lives.reduce((acc, live) => {
+    const liveName = live.name
+    const venueName = live.venue || '未定'
+    const isAttended = attendedLives.includes(live.id)
 
     if (!acc[liveName]) {
-      acc[liveName] = { artistId, artistName, artistImageUrl, venues: {} }
+      acc[liveName] = {
+        artistId: live.artists?.id || null,
+        artistName: live.artists?.name || null,
+        artistImageUrl: live.artists?.image_url || null,
+        venues: {},
+      }
     }
     if (!acc[liveName].venues[venueName]) {
       acc[liveName].venues[venueName] = []
     }
-
     acc[liveName].venues[venueName].push({
       id: live.id,
       live_date: live.live_date,
@@ -126,14 +167,7 @@ export default async function LivePage({
               venues={venues}
               userLoggedIn={!!user}
             />
-          ),
-        )}
-        {lives.length === 0 && (
-          <p className="text-center text-gray-500">
-            {query
-              ? '検索結果が見つかりませんでした。'
-              : 'まだライブが登録されていません。'}
-          </p>
+          )
         )}
       </div>
     </div>
