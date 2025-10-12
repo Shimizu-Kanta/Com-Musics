@@ -86,17 +86,34 @@ export default async function HomePage({
         query = query.in('user_id', followingIds)
       }
     } else if (sp.artistId) {
-      const { data: postIdsData } = await supabase
-        .from('tags')
-        .select('post_id')
-        .eq('artist_id', sp.artistId)
-      const postIds =
-        (postIdsData as TagRow[] | null)?.map((p) => p.post_id) ?? []
-      if (postIds.length === 0) {
+const artistId = sp.artistId
+      const allPostIds = new Set<number>()
+
+      // 1. アーティストが直接タグ付けされた投稿IDを取得
+      const { data: directTags } = await supabase.from('tags').select('post_id').eq('artist_id', artistId)
+      directTags?.forEach(t => allPostIds.add(t.post_id))
+
+      // 2. アーティストの楽曲がタグ付けされた投稿IDを取得
+      const { data: songIds } = await supabase.from('songs').select('id').eq('artist_id', artistId)
+      if (songIds && songIds.length > 0) {
+        const { data: songTags } = await supabase.from('tags').select('post_id').in('song_id', songIds.map(s => s.id))
+        songTags?.forEach(t => allPostIds.add(t.post_id))
+      }
+
+      // 3. アーティストのライブがタグ付けされた投稿IDを取得 (live_artists中間テーブル経由)
+      const { data: liveIds } = await supabase.from('live_artists').select('live_id').eq('artist_id', artistId)
+      if (liveIds && liveIds.length > 0) {
+        const { data: liveTags } = await supabase.from('tags').select('post_id').in('live_id', liveIds.map(l => l.live_id))
+        liveTags?.forEach(t => allPostIds.add(t.post_id))
+      }
+
+      const uniquePostIds = Array.from(allPostIds)
+
+      if (uniquePostIds.length === 0) {
         posts = []
         shouldSkipFetch = true
       } else {
-        query = query.in('id', postIds)
+        query = query.in('id', uniquePostIds)
       }
     }
 
