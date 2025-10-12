@@ -1,3 +1,4 @@
+// src/components/post/PostCard.tsx
 'use client'
 
 import { useState } from 'react'
@@ -6,31 +7,31 @@ import LikeButton from './LikeButton'
 import Image from 'next/image'
 import Link from 'next/link'
 import { UserCircleIcon, XMarkIcon } from '@heroicons/react/24/solid'
-import TagComponent from './TagComponent' // 新しいTagComponentをインポート
+import TagComponent from './TagComponent'
 
-// MusicLinkModalコンポーネント (変更なし)
+// MusicLinkModal（変更なし）
 function MusicLinkModal({ tag, onClose }: { tag: TagWithRelations; onClose: () => void }) {
-  let searchTerm = '';
-  let subText = '';
+  let searchTerm = ''
+  let subText = ''
 
   if (tag.songs) {
-    const song = tag.songs;
-    searchTerm = `${song.name || ''} ${song.artists?.name || ''}`;
-    subText = `${song.name} (${song.artists?.name || 'Unknown Artist'})`;
+    const song = tag.songs
+    searchTerm = `${song.name || ''} ${song.artists?.name || ''}`
+    subText = `${song.name} (${song.artists?.name || 'Unknown Artist'})`
   } else if (tag.artists) {
-    searchTerm = tag.artists.name || '';
-    subText = tag.artists.name || '';
+    searchTerm = tag.artists.name || ''
+    subText = tag.artists.name || ''
   }
 
-  const encodedSearchTerm = encodeURIComponent(searchTerm.trim());
+  const encodedSearchTerm = encodeURIComponent(searchTerm.trim())
   const links = [
     { name: 'Spotify', url: `https://open.spotify.com/search/${encodedSearchTerm}` },
     { name: 'Apple Music', url: `https://music.apple.com/search?term=${encodedSearchTerm}` },
     { name: 'YouTube Music', url: `https://music.youtube.com/search?q=${encodedSearchTerm}` },
-  ];
+  ]
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50" onClick={onClose}>
       <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold">Listen on</h3>
@@ -39,14 +40,20 @@ function MusicLinkModal({ tag, onClose }: { tag: TagWithRelations; onClose: () =
         <p className="text-sm text-gray-600 mb-4">{subText}</p>
         <div className="space-y-2">
           {links.map(link => (
-            <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="block w-full text-center bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg">
+            <a
+              key={link.name}
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full text-center bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-2 px-4 rounded-lg"
+            >
               {link.name}
             </a>
           ))}
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 export default function PostCard({ post }: { post: PostWithRelations }) {
@@ -57,8 +64,7 @@ export default function PostCard({ post }: { post: PostWithRelations }) {
   if (!profile) return null
 
   const openModal = (tag: TagWithRelations) => {
-    // ライブタグはモーダルを開かない
-    if (tag.lives) return
+    if (tag.lives) return // ライブタグはモーダル非対象
     setModalTag(tag)
     setIsModalOpen(true)
   }
@@ -67,20 +73,30 @@ export default function PostCard({ post }: { post: PostWithRelations }) {
     <div className="w-full max-w-lg p-4 mb-4 bg-white border border-gray-200 rounded-lg shadow">
       <Link href={`/${profile.user_id_text}`} className="block">
         <div className="flex items-center mb-2">
-          {profile.avatar_url ? (
-            <Image src={profile.avatar_url} alt={profile.nickname || 'avatar'} width={40} height={40} className="rounded-full mr-3" />
-          ) : (
-            <UserCircleIcon className="w-10 h-10 text-gray-400 mr-3" />
-          )}
+          {/* ▼ ここだけ変更：縦長防止のため固定サイズの円形枠 + Image fill */}
+          <div className="relative mr-3 h-10 w-10 overflow-hidden rounded-full bg-gray-200 flex-shrink-0">
+            {profile.avatar_url ? (
+              <Image
+                src={profile.avatar_url}
+                alt={profile.nickname || 'avatar'}
+                fill
+                className="object-cover"
+                sizes="40px"
+              />
+            ) : (
+              <UserCircleIcon className="h-full w-full text-gray-400" />
+            )}
+          </div>
+
           <div>
             <h3 className="font-bold text-gray-900 hover:underline">{profile.nickname}</h3>
             <p className="text-sm text-gray-500">@{profile.user_id_text}</p>
           </div>
         </div>
       </Link>
+
       <p className="text-gray-800 whitespace-pre-wrap">{post.content}</p>
-      
-      {/* ▼▼▼【重要】タグ表示のロジックを、TagComponentを使うように修正します ▼▼▼ */}
+
       {post.tags && post.tags.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
           {post.tags.map((tag: TagWithRelations) => (
@@ -88,12 +104,14 @@ export default function PostCard({ post }: { post: PostWithRelations }) {
           ))}
         </div>
       )}
-      
+
       <div className="mt-4 flex items-center space-x-4">
         <LikeButton post={post} />
       </div>
 
-      {isModalOpen && modalTag && <MusicLinkModal tag={modalTag} onClose={() => setIsModalOpen(false)} />}
+      {isModalOpen && modalTag && (
+        <MusicLinkModal tag={modalTag} onClose={() => setIsModalOpen(false)} />
+      )}
     </div>
   )
 }
