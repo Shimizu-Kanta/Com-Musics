@@ -131,6 +131,12 @@ export default function EditProfileForm({
         <div><label htmlFor="bio" className="block text-sm font-medium">自己紹介</label><textarea id="bio" name="bio" value={bio} onChange={(e) => setBio(e.target.value)} rows={4} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
 
         <div className="space-y-4">
+          <div className="relative">
+            <button type="button" onClick={() => setIsSearching(prev => !prev)} className="w-full p-2 text-left text-gray-500 border border-dashed rounded-md hover:border-indigo-500">
+              + お気に入りを追加
+            </button>
+            {isSearching && <TagSearch onTagSelect={handleTagSelect} onClose={() => setIsSearching(false)} />}
+          </div>
           <div>
             <h3 className="text-lg font-medium">お気に入りの曲</h3>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSongDragEnd}>
@@ -154,12 +160,6 @@ export default function EditProfileForm({
                 </div>
               </SortableContext>
             </DndContext>
-          </div>
-          <div className="relative">
-            <button type="button" onClick={() => setIsSearching(prev => !prev)} className="w-full p-2 text-left text-gray-500 border border-dashed rounded-md hover:border-indigo-500">
-              + お気に入りを追加
-            </button>
-            {isSearching && <TagSearch onTagSelect={handleTagSelect} onClose={() => setIsSearching(false)} />}
           </div>
         </div>
 

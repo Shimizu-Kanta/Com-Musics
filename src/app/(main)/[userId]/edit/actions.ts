@@ -11,12 +11,12 @@ async function uploadImage(supabase: SupabaseClient, userId: string, file: File,
   if (file.size === 0) return null
   const fileExt = file.name.split('.').pop()
   const filePath = `${userId}/${type}-${Date.now()}.${fileExt}`
-  const { error } = await supabase.storage.from('user-images').upload(filePath, file)
+  const { error } = await supabase.storage.from('user_images').upload(filePath, file)
   if (error) {
     console.error(`Upload Error:`, error)
     throw new Error(`${type === 'avatar' ? 'アイコン' : 'ヘッダー'}画像のアップロードに失敗しました。`)
   }
-  const { data } = supabase.storage.from('user-images').getPublicUrl(filePath)
+  const { data } = supabase.storage.from('user_images').getPublicUrl(filePath)
   return data.publicUrl
 }
 
