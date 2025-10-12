@@ -1,37 +1,48 @@
 // src/app/page.tsx（実際のパスに合わせてください）
 import { createClient } from '@/lib/supabase/server'
-import { type PostWithRelations, type Artist } from '@/types'
+import { type PostWithRelations, type Artist, type Profile } from '@/types'
 import PostCard from '@/components/post/PostCard'
 import Tab from '@/components/post/Tab'
+import CreatePostForm from '@/components/post/CreatePostForm'
 
-// --- 型定義（any を使わず明示） ---
+export const dynamic = 'force-dynamic'
+
 type SearchParams = {
   tab?: 'all' | 'following'
   artistId?: string
-  [key: string]: string | string[] | undefined
 }
 
 type FavoriteArtistRow = { artists: Artist | null }
 type FollowingRow = { following_id: string }
 type TagRow = { post_id: number }
 
-export const dynamic = 'force-dynamic'
-
 export default async function HomePage({
   searchParams,
 }: {
-  // Next.js 15: searchParams は Promise で渡る
+  // Next.js 15: searchParams は Promise で渡ってくる
   searchParams: Promise<SearchParams>
 }) {
   // Promise をアンラップ
   const sp = await searchParams
-  const supabase = createClient()
+  const type: 'all' | 'following' = sp.tab === 'following' ? 'following' : 'all'
 
+  const supabase = createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // ▼ お気に入りアーティスト（型安全に抽出）
+  // --- ログインユーザーのプロフィール情報 ---
+  let userProfile: Profile | null = null
+  if (user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+    userProfile = profile
+  }
+
+  // --- お気に入りアーティスト ---
   let favoriteArtists: Artist[] = []
   if (user) {
     const { data } = await supabase
@@ -46,84 +57,77 @@ export default async function HomePage({
         .filter((a): a is Artist => a !== null) ?? []
   }
 
-  // ▼ 投稿データ取得（tab/artistId に応じて切替）
-  const { posts, errorMessage } = await (async () => {
-    try {
-      if (sp.tab === 'following' && user) {
-        const { data: followingIdsData, error: followingIdsError } = await supabase
-          .from('followers')
-          .select('following_id')
-          .eq('follower_id', user.id)
+  // --- 投稿データ取得 ---
+  let posts: PostWithRelations[] = []
+  let errorMessage: string | null = null
 
-        if (followingIdsError) throw followingIdsError
+  try {
+    // ベースの SELECT
+    let query = supabase
+      .from('posts')
+      .select(
+        '*, profiles!inner(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)))'
+      )
+      .order('created_at', { ascending: false })
 
-        const followingIds: string[] =
-          (followingIdsData as FollowingRow[] | null)?.map((f) => f.following_id) ??
-          []
+    // フォロー中タイムライン
+    if (type === 'following' && user) {
+      const { data: followingIdsData } = await supabase
+        .from('followers')
+        .select('following_id')
+        .eq('follower_id', user.id)
 
-        if (followingIds.length === 0) {
-          return { posts: [] as PostWithRelations[], errorMessage: null as string | null }
-        }
+      const followingIds: string[] =
+        (followingIdsData as FollowingRow[] | null)?.map((f) => f.following_id) ?? []
 
-        const { data: followingPosts, error } = await supabase
-          .from('posts')
-          .select(
-            '*, profiles(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)))'
-          )
-          .in('user_id', followingIds)
-          .order('created_at', { ascending: false })
-
-        if (error) throw error
-        return { posts: (followingPosts ?? []) as PostWithRelations[], errorMessage: null }
+      if (followingIds.length === 0) {
+        posts = []
       } else {
-        // all or 未ログイン時
-        let query = supabase
-          .from('posts')
-          .select(
-            '*, profiles(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)))'
-          )
-          .order('created_at', { ascending: false })
-
-        if (sp.artistId) {
-          const { data: postIdsData, error: postIdsError } = await supabase
-            .from('tags')
-            .select('post_id')
-            .eq('artist_id', sp.artistId)
-
-          if (postIdsError) throw postIdsError
-
-          const postIds: number[] =
-            (postIdsData as TagRow[] | null)?.map((p) => p.post_id) ?? []
-
-          if (postIds.length > 0) {
-            query = query.in('id', postIds)
-          } else {
-            return { posts: [] as PostWithRelations[], errorMessage: null as string | null }
-          }
-        }
-
-        const { data: allPosts, error } = await query
-        if (error) throw error
-        return { posts: (allPosts ?? []) as PostWithRelations[], errorMessage: null }
-      }
-    } catch (err) {
-      console.error(err)
-      return {
-        posts: [] as PostWithRelations[],
-        errorMessage: '投稿の読み込みに失敗しました。',
+        query = query.in('user_id', followingIds)
       }
     }
-  })()
 
-  const currentTab: 'all' | 'following' = sp.tab === 'following' ? 'following' : 'all'
+    // 特定アーティストの投稿
+    if (!posts.length && sp.artistId) {
+      const { data: postIdsData } = await supabase
+        .from('tags')
+        .select('post_id')
+        .eq('artist_id', sp.artistId)
+
+      const postIds: number[] =
+        (postIdsData as TagRow[] | null)?.map((p) => p.post_id) ?? []
+
+      if (postIds.length === 0) {
+        posts = []
+      } else {
+        query = query.in('id', postIds)
+      }
+    }
+
+    // 実行（posts がまだ決まっていない場合のみ）
+    if (!posts.length || type === 'all') {
+      const { data, error } = await query
+      if (error) throw error
+      posts = (data ?? []) as PostWithRelations[]
+    }
+  } catch (err) {
+    console.error('Error fetching posts:', err)
+    errorMessage = '投稿の読み込みに失敗しました。'
+  }
 
   return (
     <div className="w-full max-w-lg">
+      {/* ログイン時のみ投稿フォーム表示 */}
+      {user && userProfile && (
+        <div className="border-b border-gray-200">
+          <CreatePostForm userProfile={userProfile} />
+        </div>
+      )}
+
       <div className="w-full px-4 md:hidden">
-        {/* タブに必要情報を渡す */}
         <Tab
-          currentTab={currentTab}
-          currentArtistId={typeof sp.artistId === 'string' ? sp.artistId : undefined}
+          currentTab={type}
+          currentArtistId={sp.artistId}
           favoriteArtists={favoriteArtists}
         />
       </div>
@@ -132,14 +136,14 @@ export default async function HomePage({
         <p className="p-4 text-red-500">{errorMessage}</p>
       ) : posts.length === 0 ? (
         <p className="p-4 text-center text-gray-500">
-          {currentTab === 'following'
+          {type === 'following'
             ? 'フォロー中のユーザーの投稿はまだありません。'
             : sp.artistId
             ? 'このアーティストの投稿はまだありません。'
             : 'まだ投稿がありません。'}
         </p>
       ) : (
-        <div className="mt-4 md:mt-0">
+        <div className="md:mt-0">
           {posts.map((post) => (
             <PostCard key={post.id} post={post} />
           ))}

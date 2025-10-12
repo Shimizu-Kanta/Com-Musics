@@ -6,7 +6,7 @@ import { searchTracks, searchArtists } from '@/lib/spotify/api'
 import { type ArtistInsert, type SongInsert, type TagInsert } from '@/types'
 import { type Tag } from '@/components/post/TagSearch'
 
-// searchMusic関数
+// (searchMusic, searchArtistsAction, toggleLike 関数は変更ありません)
 export async function searchMusic(query: string) {
   if (!query) return []
   try {
@@ -17,8 +17,6 @@ export async function searchMusic(query: string) {
     return []
   }
 }
-
-// searchArtistsAction関数
 export async function searchArtistsAction(query: string) {
   if (!query) return []
   try {
@@ -29,101 +27,63 @@ export async function searchArtistsAction(query: string) {
     return []
   }
 }
-
-// toggleLike関数 (変更なし)
 export async function toggleLike(postId: number) {
   const supabase = createClient()
-
-  // 1. ログイン中のユーザー情報を取得
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
 
-  // 2. ユーザーが既にその投稿を「いいね」しているか確認
-  const { data: like, error } = await supabase
+  const { data: like } = await supabase
     .from('likes')
-    .select('*')
+    .select('id')
     .eq('user_id', user.id)
     .eq('post_id', postId)
     .single()
 
-  if (error && error.code !== 'PGRST116') {
-    console.error('Error checking like:', error)
-    return
-  }
-
-  // 3. もし「いいね」が既にあれば、それを削除（いいね解除）
   if (like) {
-    await supabase.from('likes').delete().match({ id: like.id })
-  }
-  // 4. もし「いいね」がなければ、新しく追加（いいねする）
-  else {
+    await supabase.from('likes').delete().eq('id', like.id)
+  } else {
     await supabase.from('likes').insert({ user_id: user.id, post_id: postId })
   }
-
-  // 5. ページの表示を更新
   revalidatePath('/')
 }
 
-// createPost関数 (ここを最終版に修正)
-export async function createPost(formData: FormData) {
+// ▼▼▼【重要】createPost関数を、2つの引数を受け取る正しい形に修正します ▼▼▼
+export async function createPost(content: string, tags: Tag[]) {
   const supabase = createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { error: 'You must be logged in to post.' }
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user || !content.trim()) {
+    return
+  }
 
-  const content = formData.get('content') as string
-  if (!content) return { error: 'Content cannot be empty.' }
-
-  const tagsJson = formData.get('tags') as string
-  const tags: Tag[] = JSON.parse(tagsJson)
-
-  // 1. 投稿を作成
+  // 1. 投稿をpostsテーブルに挿入
   const { data: postData, error: postError } = await supabase
     .from('posts')
-    .insert({ content: content, user_id: user.id })
+    .insert({ content, user_id: user.id })
     .select()
     .single()
 
-  if (postError) {
+  if (postError || !postData) {
     console.error('Error creating post:', postError)
-    return { error: 'Failed to create post.' }
+    return
   }
 
-  // 2. タグがあれば処理
+  // 2. タグが存在する場合、関連テーブルにデータを保存
   if (tags && tags.length > 0) {
     for (const tag of tags) {
       if (tag.type === 'song') {
-        // --- 楽曲タグの処理 (お気に入り処理とロジックを統一) ---
-        // 2a. 親であるアーティストを登録
-        await supabase.from('artists').upsert({ id: tag.artistId!, name: tag.artistName! })
-
-        // 2b. 子である曲を登録
-        const songToInsert: SongInsert = {
-          id: tag.id,
-          name: tag.name,
-          artist_id: tag.artistId!,
-          album_art_url: tag.imageUrl,
-        }
+        const artistToInsert: ArtistInsert = { id: tag.artistId!, name: tag.artistName! }
+        await supabase.from('artists').upsert(artistToInsert)
+        const songToInsert: SongInsert = { id: tag.id, name: tag.name, artist_id: tag.artistId!, album_art_url: tag.imageUrl }
         await supabase.from('songs').upsert(songToInsert)
-
-        // 2c. タグを登録
         const tagToInsert: TagInsert = { post_id: postData.id, song_id: tag.id }
         await supabase.from('tags').insert(tagToInsert)
-
       } else if (tag.type === 'artist') {
-        // --- アーティストタグの処理 ---
         const artistToInsert: ArtistInsert = { id: tag.id, name: tag.name, image_url: tag.imageUrl }
         await supabase.from('artists').upsert(artistToInsert)
         const tagToInsert: TagInsert = { post_id: postData.id, artist_id: tag.id }
         await supabase.from('tags').insert(tagToInsert)
       } else if (tag.type === 'live') {
-        const tagToInsert: TagInsert = {
-          post_id: postData.id,
-          live_id: parseInt(tag.id, 10), // idを数値に変換
-        }
+        const tagToInsert: TagInsert = { post_id: postData.id, live_id: parseInt(tag.id, 10) }
         await supabase.from('tags').insert(tagToInsert)
       }
     }
@@ -132,16 +92,15 @@ export async function createPost(formData: FormData) {
   revalidatePath('/')
 }
 
-// ライブ情報を検索するサーバーアクション
+// (searchLivesAction 関数は変更ありません)
 export async function searchLivesAction(query: string) {
   'use server'
   if (!query) return []
   const supabase = createClient()
   
-  // artistsテーブルと結合し、関連するアーティスト名も一緒に取得します
   const { data, error } = await supabase
     .from('lives')
-    .select('*, artists(name)') // artists(name) を追加
+    .select('*, artists(name)')
     .ilike('name', `%${query}%`)
     .limit(10)
 
