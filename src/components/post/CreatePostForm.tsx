@@ -1,7 +1,7 @@
-// src/components/post/CreatePostForm.tsx
 'use client'
 
-import { useState, useRef } from 'react'
+// ▼▼▼【重要】useTransitionフックをインポートします ▼▼▼
+import { useState, useRef, useTransition } from 'react'
 import Image from 'next/image'
 import { createPost } from '@/app/(main)/post/actions'
 import TagSearch, { type Tag } from './TagSearch'
@@ -13,6 +13,9 @@ type NewPostFormProps = {
 }
 
 export default function NewPostForm({ userProfile }: NewPostFormProps) {
+  // ▼▼▼【重要】useTransitionをセットアップします ▼▼▼
+  const [isPending, startTransition] = useTransition()
+
   const [content, setContent] = useState('')
   const [tags, setTags] = useState<Tag[]>([])
   const [isTagSearchOpen, setIsTagSearchOpen] = useState(false)
@@ -29,26 +32,28 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
     setTags(tags.filter(tag => !(tag.id === tagToRemove.id && tag.type === tagToRemove.type)))
   }
 
+  // ▼▼▼【重要】フォーム送信処理をstartTransitionでラップします ▼▼▼
   const handleSubmit = async () => {
     if (!content.trim()) return
-    await createPost(content, tags)
-    setContent('')
-    setTags([])
-    formRef.current?.reset()
+
+    startTransition(async () => {
+      await createPost(content, tags)
+      setContent('')
+      setTags([])
+      formRef.current?.reset()
+    })
   }
 
   return (
     <div className="w-full max-w-lg p-4 bg-white">
       <form action={handleSubmit} ref={formRef}>
         <div className="flex justify-between items-start gap-4">
-          {/* アバター */}
           {userProfile.avatar_url ? (
             <Image src={userProfile.avatar_url} alt="avatar" width={48} height={48} className="rounded-full w-12 h-12" />
           ) : (
             <UserCircleIcon className="w-12 h-12 text-gray-400" />
           )}
 
-          {/* 入力＆操作 */}
           <div className="flex-1">
             <textarea
               name="content"
@@ -59,7 +64,6 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
               rows={3}
             />
 
-            {/* タグ表示 */}
             {tags.length > 0 && (
               <div className="my-2 flex flex-wrap gap-2">
                 {tags.map(tag => (
@@ -74,7 +78,6 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
             )}
 
             <div className="mt-2 flex items-center justify-between">
-              {/* ▼ ポップオーバーの基準（縮まない & 相対） */}
               <div className="relative inline-block shrink-0">
                 <button
                   type="button"
@@ -85,7 +88,6 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
                 </button>
 
                 {isTagSearchOpen && (
-                  // ▼ 幅と位置を固定して一列タブが収まるよう少し広め
                   <div className="absolute left-0 top-full mt-2 w-80 min-w-[20rem] max-w-[90vw] z-50">
                     <TagSearch
                       onTagSelect={handleTagSelect}
@@ -97,10 +99,12 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
 
               <button
                 type="submit"
-                disabled={!content.trim()}
+                // ▼▼▼【重要】isPendingがtrueの間、ボタンを無効化します ▼▼▼
+                disabled={!content.trim() || isPending}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-full disabled:bg-indigo-300"
               >
-                投稿する
+                {/* ▼▼▼【重要】処理中はボタンのテキストを変更します ▼▼▼ */}
+                {isPending ? '投稿中...' : '投稿する'}
               </button>
             </div>
           </div>
