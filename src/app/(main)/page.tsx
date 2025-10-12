@@ -1,4 +1,4 @@
-// src/app/page.tsx（実際のパスに合わせてください）
+// src/app/(main)/page.tsx
 import { createClient } from '@/lib/supabase/server'
 import { type PostWithRelations, type Artist, type Profile } from '@/types'
 import PostCard from '@/components/post/PostCard'
@@ -12,26 +12,25 @@ type SearchParams = {
   artistId?: string
 }
 
-type FavoriteArtistRow = { artists: Artist | null }
 type FollowingRow = { following_id: string }
 type TagRow = { post_id: number }
+
+// ★ 追加: artists が単体/配列どちらでも来る可能性に対応するための行型
+type FavoriteArtistsJoinRow =
+  | { artists: Artist | null }
+  | { artists: Artist[] | null }
 
 export default async function HomePage({
   searchParams,
 }: {
-  // Next.js 15: searchParams は Promise で渡ってくる
   searchParams: Promise<SearchParams>
 }) {
-  // Promise をアンラップ
   const sp = await searchParams
   const type: 'all' | 'following' = sp.tab === 'following' ? 'following' : 'all'
 
   const supabase = createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  // --- ログインユーザーのプロフィール情報 ---
   let userProfile: Profile | null = null
   if (user) {
     const { data: profile } = await supabase
@@ -42,27 +41,28 @@ export default async function HomePage({
     userProfile = profile
   }
 
-  // --- お気に入りアーティスト ---
+  // ▼ 修正: artists を単体/配列どちらでも安全に Artist[] へ正規化
   let favoriteArtists: Artist[] = []
   if (user) {
-    const { data } = await supabase
+    const { data: favArtistData } = await supabase
       .from('favorite_artists')
       .select('artists(*)')
       .eq('user_id', user.id)
       .order('sort_order')
 
     favoriteArtists =
-      (data as FavoriteArtistRow[] | null)
-        ?.map((fav) => fav.artists)
-        .filter((a): a is Artist => a !== null) ?? []
+      (favArtistData as FavoriteArtistsJoinRow[] | null)
+        ?.flatMap((row) => {
+          const a = (row as { artists: Artist | Artist[] | null }).artists
+          if (!a) return []
+          return Array.isArray(a) ? a : [a]
+        }) ?? []
   }
 
-  // --- 投稿データ取得 ---
   let posts: PostWithRelations[] = []
   let errorMessage: string | null = null
 
   try {
-    // ベースの SELECT
     let query = supabase
       .from('posts')
       .select(
@@ -70,45 +70,48 @@ export default async function HomePage({
       )
       .order('created_at', { ascending: false })
 
-    // フォロー中タイムライン
+    let shouldSkipFetch = false
+
     if (type === 'following' && user) {
       const { data: followingIdsData } = await supabase
         .from('followers')
         .select('following_id')
         .eq('follower_id', user.id)
-
-      const followingIds: string[] =
+      const followingIds =
         (followingIdsData as FollowingRow[] | null)?.map((f) => f.following_id) ?? []
-
       if (followingIds.length === 0) {
         posts = []
+        shouldSkipFetch = true
       } else {
         query = query.in('user_id', followingIds)
       }
-    }
-
-    // 特定アーティストの投稿
-    if (!posts.length && sp.artistId) {
+    } else if (sp.artistId) {
       const { data: postIdsData } = await supabase
         .from('tags')
         .select('post_id')
         .eq('artist_id', sp.artistId)
-
-      const postIds: number[] =
+      const postIds =
         (postIdsData as TagRow[] | null)?.map((p) => p.post_id) ?? []
-
       if (postIds.length === 0) {
         posts = []
+        shouldSkipFetch = true
       } else {
         query = query.in('id', postIds)
       }
     }
 
-    // 実行（posts がまだ決まっていない場合のみ）
-    if (!posts.length || type === 'all') {
+    if (!shouldSkipFetch) {
       const { data, error } = await query
       if (error) throw error
-      posts = (data ?? []) as PostWithRelations[]
+
+      // like配列に対して user が含まれるかを判定（any 不使用）
+      posts = (data ?? []).map((post) => ({
+        ...post,
+        is_liked_by_user:
+          !!user && Array.isArray(post.likes)
+            ? post.likes.some((like: { user_id: string }) => like.user_id === user.id)
+            : false,
+      }))
     }
   } catch (err) {
     console.error('Error fetching posts:', err)
@@ -117,13 +120,12 @@ export default async function HomePage({
 
   return (
     <div className="w-full max-w-lg">
-      {/* ログイン時のみ投稿フォーム表示 */}
       {user && userProfile && (
         <div className="border-b border-gray-200">
           <CreatePostForm userProfile={userProfile} />
         </div>
       )}
-
+      {/* ▼ 微修正: Tailwind のクラス記法 md-hidden → md:hidden */}
       <div className="w-full px-4 md:hidden">
         <Tab
           currentTab={type}
