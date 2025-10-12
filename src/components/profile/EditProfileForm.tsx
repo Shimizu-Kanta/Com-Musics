@@ -183,10 +183,34 @@ export default function EditProfileForm({
 
       <form action={clientAction} className="space-y-6">
         <input type="hidden" name="user_id_text" value={profile.user_id_text} />
-        <div><label className="block text-sm font-medium">ヘッダー画像</label><div className="mt-1 w-full h-48 bg-gray-200 rounded-lg flex items-center justify-center relative overflow-hidden">{headerPreview ? <Image src={headerPreview} alt="Header preview" layout="fill" objectFit="cover" /> : <PhotoIcon className="w-12 h-12 text-gray-400" />}<input type="file" name="header" accept="image/*" onChange={(e) => handleImageChange(e, 'header')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/></div></div>
-        <div><label className="block text-sm font-medium">アイコン</label><div className="mt-1 w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center relative overflow-hidden">{avatarPreview ? <Image src={avatarPreview} alt="Avatar preview" layout="fill" objectFit="cover" /> : <UserCircleIcon className="w-16 h-16 text-gray-400" />}<input type="file" name="avatar" accept="image/*" onChange={(e) => handleImageChange(e, 'avatar')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/></div></div>
-        <div><label htmlFor="nickname" className="block text-sm font-medium">ニックネーム</label><input type="text" id="nickname" name="nickname" value={nickname || ''} onChange={(e) => setNickname(e.target.value)} required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
-        <div><label htmlFor="bio" className="block text-sm font-medium">自己紹介</label><textarea id="bio" name="bio" value={bio} onChange={(e) => setBio(e.target.value)} rows={4} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/></div>
+        <div>
+          <label className="block text-sm font-medium">ヘッダー画像</label>
+          <div className="mt-1 w-full h-48 bg-gray-200 rounded-lg flex items-center justify-center relative overflow-hidden">{headerPreview ? <Image src={headerPreview} alt="Header preview" layout="fill" objectFit="cover" /> : <PhotoIcon className="w-12 h-12 text-gray-400" />}
+            <input type="file" name="header" accept="image/*" onChange={(e) => handleImageChange(e, 'header')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium">アイコン</label>
+          <div className="mt-1 w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center relative overflow-hidden">
+            {avatarPreview ? (
+              <Image src={avatarPreview} alt="Avatar preview" layout="fill" objectFit="cover" />
+            ) : (
+              <UserCircleIcon className="w-16 h-16 text-gray-400" />
+            )}
+            <input type="file" name="avatar" accept="image/*" onChange={(e) => handleImageChange(e, 'avatar')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+          </div>
+        </div>
+        <div>
+          <label htmlFor="nickname" className="block text-sm font-medium">ニックネーム</label>
+          <input type="text" id="nickname" name="nickname" value={nickname || ''} onChange={(e) => setNickname(e.target.value)} required className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/>
+        </div>
+        <div>
+          <label htmlFor="bio" className="block text-sm font-medium">自己紹介</label>
+          <textarea id="bio" name="bio" value={bio} onChange={(e) => setBio(e.target.value)} rows={4} maxLength={300} className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"/>
+          <p className="text-right text-sm text-gray-500 mt-1">
+            {bio.length} / 300
+          </p>
+        </div>
 
         <div className="space-y-4">
           <div className="relative">
