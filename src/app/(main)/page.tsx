@@ -1,9 +1,8 @@
-// src/app/(main)/page.tsx
 import { createClient } from '@/lib/supabase/server'
 import { type PostWithRelations, type Artist, type Profile } from '@/types'
-import PostCard from '@/components/post/PostCard'
 import Tab from '@/components/post/Tab'
 import CreatePostForm from '@/components/post/CreatePostForm'
+import PostList from '@/components/post/PostList' // 無限スクロール用の新しい部品をインポート
 
 export const dynamic = 'force-dynamic'
 
@@ -14,11 +13,11 @@ type SearchParams = {
 
 type FollowingRow = { following_id: string }
 type TagRow = { post_id: number }
-
-// ★ 追加: artists が単体/配列どちらでも来る可能性に対応するための行型
 type FavoriteArtistsJoinRow =
   | { artists: Artist | null }
   | { artists: Artist[] | null }
+
+const POSTS_PER_PAGE = 20;
 
 export default async function HomePage({
   searchParams,
@@ -26,11 +25,10 @@ export default async function HomePage({
   searchParams: Promise<SearchParams>
 }) {
   const sp = await searchParams
-  const type: 'all' | 'following' = sp.tab === 'following' ? 'following' : 'all'
-
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
+  // --- ログインユーザーのプロフィール情報 ---
   let userProfile: Profile | null = null
   if (user) {
     const { data: profile } = await supabase
@@ -41,7 +39,7 @@ export default async function HomePage({
     userProfile = profile
   }
 
-  // ▼ 修正: artists を単体/配列どちらでも安全に Artist[] へ正規化
+  // --- お気に入りアーティストの情報 ---
   let favoriteArtists: Artist[] = []
   if (user) {
     const { data: favArtistData } = await supabase
@@ -49,80 +47,51 @@ export default async function HomePage({
       .select('artists(*)')
       .eq('user_id', user.id)
       .order('sort_order')
-
-    favoriteArtists =
-      (favArtistData as FavoriteArtistsJoinRow[] | null)
-        ?.flatMap((row) => {
-          const a = (row as { artists: Artist | Artist[] | null }).artists
-          if (!a) return []
-          return Array.isArray(a) ? a : [a]
-        }) ?? []
+    
+    if (favArtistData) {
+      favoriteArtists = favArtistData
+        .map((item: FavoriteArtistsJoinRow) => item.artists)
+        .flat()
+        .filter((artist): artist is Artist => artist !== null);
+    }
   }
 
-  let posts: PostWithRelations[] = []
+  // --- 最初の投稿20件だけを取得する ---
+  let initialPosts: PostWithRelations[] = []
   let errorMessage: string | null = null
-
   try {
     let query = supabase
       .from('posts')
-      .select(
-        '*, profiles!inner(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)))'
-      )
+      .select('*, profiles!inner(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)))')
       .order('created_at', { ascending: false })
+      .range(0, POSTS_PER_PAGE - 1) // 最初の20件に絞る
 
-    let shouldSkipFetch = false
+    let shouldSkipQuery = false
 
-    if (type === 'following' && user) {
-      const { data: followingIdsData } = await supabase
-        .from('followers')
-        .select('following_id')
-        .eq('follower_id', user.id)
-      const followingIds =
-        (followingIdsData as FollowingRow[] | null)?.map((f) => f.following_id) ?? []
-      if (followingIds.length === 0) {
-        posts = []
-        shouldSkipFetch = true
-      } else {
+    if (sp.tab === 'following' && user) {
+      const { data: followingIdsData } = await supabase.from('followers').select('following_id').eq('follower_id', user.id)
+      const followingIds = (followingIdsData as FollowingRow[] | null)?.map(f => f.following_id) ?? []
+      if (followingIds.length > 0) {
         query = query.in('user_id', followingIds)
+      } else {
+        initialPosts = []
+        shouldSkipQuery = true
       }
     } else if (sp.artistId) {
-const artistId = sp.artistId
-      const allPostIds = new Set<number>()
-
-      // 1. アーティストが直接タグ付けされた投稿IDを取得
-      const { data: directTags } = await supabase.from('tags').select('post_id').eq('artist_id', artistId)
-      directTags?.forEach(t => allPostIds.add(t.post_id))
-
-      // 2. アーティストの楽曲がタグ付けされた投稿IDを取得
-      const { data: songIds } = await supabase.from('songs').select('id').eq('artist_id', artistId)
-      if (songIds && songIds.length > 0) {
-        const { data: songTags } = await supabase.from('tags').select('post_id').in('song_id', songIds.map(s => s.id))
-        songTags?.forEach(t => allPostIds.add(t.post_id))
-      }
-
-      // 3. アーティストのライブがタグ付けされた投稿IDを取得 (live_artists中間テーブル経由)
-      const { data: liveIds } = await supabase.from('live_artists').select('live_id').eq('artist_id', artistId)
-      if (liveIds && liveIds.length > 0) {
-        const { data: liveTags } = await supabase.from('tags').select('post_id').in('live_id', liveIds.map(l => l.live_id))
-        liveTags?.forEach(t => allPostIds.add(t.post_id))
-      }
-
-      const uniquePostIds = Array.from(allPostIds)
-
-      if (uniquePostIds.length === 0) {
-        posts = []
-        shouldSkipFetch = true
+      const { data: postIdsData } = await supabase.from('tags').select('post_id').eq('artist_id', sp.artistId)
+      const postIds = (postIdsData as TagRow[] | null)?.map((p) => p.post_id) ?? []
+      if (postIds.length > 0) {
+        query = query.in('id', postIds)
       } else {
-        query = query.in('id', uniquePostIds)
+        initialPosts = []
+        shouldSkipQuery = true
       }
     }
-
-    if (!shouldSkipFetch) {
+    
+    if (!shouldSkipQuery) {
       const { data, error } = await query
       if (error) throw error
-
-      // like配列に対して user が含まれるかを判定（any 不使用）
-      posts = (data ?? []).map((post) => ({
+      initialPosts = (data ?? []).map((post) => ({
         ...post,
         is_liked_by_user:
           !!user && Array.isArray(post.likes)
@@ -131,7 +100,7 @@ const artistId = sp.artistId
       }))
     }
   } catch (err) {
-    console.error('Error fetching posts:', err)
+    console.error('Error fetching initial posts:', err)
     errorMessage = '投稿の読み込みに失敗しました。'
   }
 
@@ -142,10 +111,9 @@ const artistId = sp.artistId
           <CreatePostForm userProfile={userProfile} />
         </div>
       )}
-      {/* ▼ 微修正: Tailwind のクラス記法 md-hidden → md:hidden */}
       <div className="w-full px-4 md:hidden">
         <Tab
-          currentTab={type}
+          currentTab={sp.tab || 'all'}
           currentArtistId={sp.artistId}
           favoriteArtists={favoriteArtists}
         />
@@ -153,20 +121,9 @@ const artistId = sp.artistId
 
       {errorMessage ? (
         <p className="p-4 text-red-500">{errorMessage}</p>
-      ) : posts.length === 0 ? (
-        <p className="p-4 text-center text-gray-500">
-          {type === 'following'
-            ? 'フォロー中のユーザーの投稿はまだありません。'
-            : sp.artistId
-            ? 'このアーティストの投稿はまだありません。'
-            : 'まだ投稿がありません。'}
-        </p>
       ) : (
-        <div className="md:mt-0">
-          {posts.map((post) => (
-            <PostCard key={post.id} post={post} />
-          ))}
-        </div>
+        // ▼▼▼ 投稿リストの表示を、新しいPostList部品に任せます ▼▼▼
+        <PostList initialPosts={initialPosts} userId={user?.id} />
       )}
     </div>
   )

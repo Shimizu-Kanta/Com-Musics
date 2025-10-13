@@ -3,8 +3,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { searchTracks, searchArtists } from '@/lib/spotify/api'
-import { type ArtistInsert, type SongInsert, type TagInsert } from '@/types'
+import { type ArtistInsert, type SongInsert, type TagInsert, type PostWithRelations } from '@/types'
 import { type Tag } from '@/components/post/TagSearch'
+
+const POSTS_PER_PAGE = 20;
 
 // (searchMusic, searchArtistsAction, toggleLike 関数は変更ありません)
 export async function searchMusic(query: string) {
@@ -109,4 +111,74 @@ export async function searchLivesAction(query: string) {
     return []
   }
   return data || []
+}
+
+export async function fetchPosts({ 
+  page = 1, 
+  userId, 
+  tab, 
+  artistId, 
+  profileUserId,
+  searchQuery
+}: { 
+  page: number; 
+  userId?: string; 
+  tab?: string; 
+  artistId?: string; 
+  profileUserId?: string;
+  searchQuery?: string;
+}) {
+  const supabase = createClient()
+
+  const from = page * POSTS_PER_PAGE;
+  const to = from + POSTS_PER_PAGE - 1;
+
+  let query = supabase
+    .from('posts')
+    .select('*, profiles!inner(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)))')
+    .order('created_at', { ascending: false })
+    .range(from, to)
+
+  // --- どのタイムラインかによって、問い合わせ内容を切り替える ---
+  if (searchQuery) {
+    query = query.ilike('content', `%${searchQuery}%`)
+  } 
+  else if (profileUserId) {
+    query = query.eq('user_id', profileUserId)
+  }
+  else {
+    if (tab === 'following' && userId) {
+      const { data: followingIdsData } = await supabase.from('followers').select('following_id').eq('follower_id', userId)
+      const followingIds = followingIdsData?.map(f => f.following_id) ?? []
+      if (followingIds.length > 0) {
+        query = query.in('user_id', followingIds)
+      } else {
+        return []
+      }
+    } else if (artistId) {
+      const { data: postIdsData } = await supabase.from('tags').select('post_id').eq('artist_id', artistId)
+      const postIds = postIdsData?.map((p) => p.post_id) ?? []
+      if (postIds.length > 0) {
+        query = query.in('id', postIds)
+      } else {
+        return []
+      }
+    }
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.error('Error fetching more posts:', error)
+    return []
+  }
+
+  const posts: PostWithRelations[] = (data ?? []).map((post) => ({
+    ...post,
+    is_liked_by_user:
+      !!userId && Array.isArray(post.likes)
+        ? post.likes.some((like: { user_id: string }) => like.user_id === userId)
+        : false,
+  }))
+  
+  return posts;
 }
