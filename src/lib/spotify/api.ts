@@ -21,18 +21,13 @@ interface SpotifyTrack {
   album: SpotifyAlbum
 }
 
-// .env.localからキーを読み込む
 const client_id = process.env.SPOTIFY_CLIENT_ID
 const client_secret = process.env.SPOTIFY_CLIENT_SECRET
 const basic = Buffer.from(`${client_id}:${client_secret}`).toString('base64')
 
-// Spotifyの認証APIのエンドポイント
 const TOKEN_ENDPOINT = `https://accounts.spotify.com/api/token`
-// Spotifyの検索APIのエンドポイント
 const SEARCH_ENDPOINT = `https://api.spotify.com/v1/search`
 
-// 1. アクセストークンを取得する関数
-//    これがSpotify APIと会話するための「一時的な許可証」です
 const getAccessToken = async () => {
   const response = await fetch(TOKEN_ENDPOINT, {
     method: 'POST',
@@ -41,66 +36,56 @@ const getAccessToken = async () => {
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body: 'grant_type=client_credentials',
-    // Next.jsのキャッシュ機能を無効にし、毎回新しいトークンを取得するようにする
-    cache: 'no-store',
-  })
-
+    cache: 'no-store'
+  });
   return response.json()
 }
 
-// 2. 楽曲を検索する関数
 export const searchTracks = async (query: string) => {
-  // まず、許可証（アクセストークン）を取得
   const { access_token } = await getAccessToken()
 
-  // 取得した許可証を使って、Spotifyに検索リクエストを送る
   const response = await fetch(
-    // 日本の楽曲を優先的に検索し、結果を10件に絞る
-    `${SEARCH_ENDPOINT}?q=${query}&type=track&market=JP&limit=10`,
+    `${SEARCH_ENDPOINT}?q=${encodeURIComponent(query)}&type=track&market=JP&limit=10`,
     {
       headers: {
         Authorization: `Bearer ${access_token}`,
-        'Accept-Language': 'ja-JP, ja;q=0.9',
+        'Accept-Language': 'ja-JP,ja;q=0.9',
       },
     }
   )
 
   const data = await response.json()
 
-  // 扱いやすいように、必要な情報だけを抽出して返す
+  // ▼▼▼【重要】ここからが今回の主な修正点です ▼▼▼
   return data.tracks.items.map((track: SpotifyTrack) => ({
     id: track.id,
     name: track.name,
-    // こちらもSpotifyArtist型を使います
     artist: track.artists.map((_artist: SpotifyArtist) => _artist.name).join(', '),
     artistId: track.artists[0]?.id,
-    albumArtUrl: track.album.images[0]?.url,
+    artistName: track.artists[0]?.name,
+    // 'imageUrl' を 'albumArtUrl' に変更し、TagSearch.tsxの期待に合わせます
+    albumArtUrl: track.album.images[0]?.url, 
   }))
+  // ▲▲▲
 }
 
-// 3. アーティストを検索する関数
+// (アーティスト検索の関数は、元々imageUrlを使っているので変更ありません)
 export const searchArtists = async (query: string) => {
   const { access_token } = await getAccessToken()
 
   const response = await fetch(
-    `${SEARCH_ENDPOINT}?q=${query}&type=artist&market=JP&limit=10`,
+    `${SEARCH_ENDPOINT}?q=${encodeURIComponent(query)}&type=artist&market=JP&limit=5`,
     {
       headers: {
         Authorization: `Bearer ${access_token}`,
-        'Accept-Language': 'ja-JP, ja;q=0.9',
+        'Accept-Language': 'ja-JP,ja;q=0.9',
       },
     }
   )
-
   const data = await response.json()
-
-  if (!data.artists) {
-    return []
-  }
-
-  return data.artists.items.map((artist: SpotifyArtist) => ({
-    id: artist.id,
-    name: artist.name,
-    imageUrl: artist.images?.[0]?.url,
+  return data.artists.items.map((_artist: SpotifyArtist) => ({
+    id: _artist.id,
+    name: _artist.name,
+    imageUrl: _artist.images?.[0]?.url,
   }))
 }
