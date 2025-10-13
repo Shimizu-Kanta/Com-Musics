@@ -1,130 +1,117 @@
+// src/app/(main)/page.tsx
 import { createClient } from '@/lib/supabase/server'
-import { type PostWithRelations, type Artist, type Profile } from '@/types'
-import Tab from '@/components/post/Tab'
-import CreatePostForm from '@/components/post/CreatePostForm'
-import PostList from '@/components/post/PostList' // 無限スクロール用の新しい部品をインポート
+import { notFound } from 'next/navigation'
+import Link from 'next/link'
+import FollowButton from '@/components/profile/FollowButton'
+import { type Database } from '@/types/database'
+import { UserCircleIcon } from '@heroicons/react/24/solid'
+import InteractiveTag from '@/components/shared/InteractiveTag'
+import { type Tag } from '@/components/post/TagSearch'
+import Image from 'next/image'
+// ▼▼▼【重要】ここからが今回の主な修正点です ▼▼▼
+import PostList from '@/components/post/PostList'       // 共通部品をインポート
+import { type PostWithRelations } from '@/types'     // 型定義をインポート
+
+const POSTS_PER_PAGE = 20;
+// ▲▲▲
+
+type PageParams = { userId: string }
+
+// (DB 派生型定義は変更ありません)
+type Song = Database['public']['Tables']['songs']['Row'] & {
+  artists: { name: string; id: string } | null
+}
+type Artist = Database['public']['Tables']['artists']['Row']
+type Live = { id: number; name: string; live_date: string | null; artists: { name: string | null } | null }
+type AttendedLivesJoinRow = | { lives: Live | null } | { lives: Live[] | null }
+type FavoriteSongRow = { songs: Song | null }
+type FavoriteArtistRow = { artists: Artist | null }
 
 export const dynamic = 'force-dynamic'
 
-type SearchParams = {
-  tab?: 'all' | 'following'
-  artistId?: string
-}
-
-type FollowingRow = { following_id: string }
-type TagRow = { post_id: number }
-type FavoriteArtistsJoinRow =
-  | { artists: Artist | null }
-  | { artists: Artist[] | null }
-
-const POSTS_PER_PAGE = 20;
-
-export default async function HomePage({
-  searchParams,
+// ✅ Promise を await して取り出す形に修正（Next.js 15対応）
+export default async function ProfilePage({
+  params,
 }: {
-  searchParams: Promise<SearchParams>
+  params: Promise<PageParams>
 }) {
-  const sp = await searchParams
+  const { userId } = await params
+
   const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user: loggedInUser } } = await supabase.auth.getUser()
 
-  // --- ログインユーザーのプロフィール情報 ---
-  let userProfile: Profile | null = null
-  if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('user_id_text', userId) // ← params.userId を userId へ
+    .single()
+
+  if (!profile) {
+    notFound()
+  }
+
+  let isFollowing = false
+  if (loggedInUser && loggedInUser.id !== profile.id) {
+    const { data: followingRecord } = await supabase
+      .from('followers')
+      .select('id')
+      .eq('follower_id', loggedInUser.id)
+      .eq('following_id', profile.id)
       .single()
-    userProfile = profile
+    isFollowing = !!followingRecord
   }
+  
+  // (お気に入りや参戦ライブのデータ取得ロジックは一切変更ありません)
+  const { data: attendedLivesData } = await supabase.from('attended_lives').select('lives(*, artists(name))').eq('user_id', profile.id)
+  const attendedLives = (attendedLivesData as AttendedLivesJoinRow[] | null)?.map(row => row.lives).flat().filter((live): live is Live => !!live) ?? []
+  const { data: favSongsData } = await supabase.from('favorite_songs').select('songs(*, artists(id, name))').eq('user_id', profile.id).order('sort_order')
+  const favoriteSongTags: Tag[] = (favSongsData as FavoriteSongRow[] | null)?.map(row => { const song = row.songs; return { id: song?.id || '', name: song?.name || '', type: 'song' as const, artistId: song?.artists?.id, artistName: song?.artists?.name, } }).filter(tag => tag.id) ?? []
+  const { data: favArtistsData } = await supabase.from('favorite_artists').select('artists(*)') .eq('user_id', profile.id) .order('sort_order')
+  const favoriteArtistTags: Tag[] = (favArtistsData as FavoriteArtistRow[] | null)?.map(row => { const artist = row.artists; return { id: artist?.id || '', name: artist?.name || '', type: 'artist' as const, imageUrl: artist?.image_url ?? undefined, } }).filter(tag => tag.id) ?? []
 
-  // --- お気に入りアーティストの情報 ---
-  let favoriteArtists: Artist[] = []
-  if (user) {
-    const { data: favArtistData } = await supabase
-      .from('favorite_artists')
-      .select('artists(*)')
-      .eq('user_id', user.id)
-      .order('sort_order')
-    
-    if (favArtistData) {
-      favoriteArtists = favArtistData
-        .map((item: FavoriteArtistsJoinRow) => item.artists)
-        .flat()
-        .filter((artist): artist is Artist => artist !== null);
-    }
-  }
-
-  // --- 最初の投稿20件だけを取得する ---
-  let initialPosts: PostWithRelations[] = []
-  let errorMessage: string | null = null
-  try {
-    let query = supabase
-      .from('posts')
-      .select('*, profiles!inner(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)))')
-      .order('created_at', { ascending: false })
-      .range(0, POSTS_PER_PAGE - 1) // 最初の20件に絞る
-
-    let shouldSkipQuery = false
-
-    if (sp.tab === 'following' && user) {
-      const { data: followingIdsData } = await supabase.from('followers').select('following_id').eq('follower_id', user.id)
-      const followingIds = (followingIdsData as FollowingRow[] | null)?.map(f => f.following_id) ?? []
-      if (followingIds.length > 0) {
-        query = query.in('user_id', followingIds)
-      } else {
-        initialPosts = []
-        shouldSkipQuery = true
-      }
-    } else if (sp.artistId) {
-      const { data: postIdsData } = await supabase.from('tags').select('post_id').eq('artist_id', sp.artistId)
-      const postIds = (postIdsData as TagRow[] | null)?.map((p) => p.post_id) ?? []
-      if (postIds.length > 0) {
-        query = query.in('id', postIds)
-      } else {
-        initialPosts = []
-        shouldSkipQuery = true
-      }
-    }
-    
-    if (!shouldSkipQuery) {
-      const { data, error } = await query
-      if (error) throw error
-      initialPosts = (data ?? []).map((post) => ({
-        ...post,
-        is_liked_by_user:
-          !!user && Array.isArray(post.likes)
-            ? post.likes.some((like: { user_id: string }) => like.user_id === user.id)
-            : false,
-      }))
-    }
-  } catch (err) {
-    console.error('Error fetching initial posts:', err)
-    errorMessage = '投稿の読み込みに失敗しました。'
-  }
+  // ▼▼▼【重要】このユーザーの最初の投稿20件だけを取得します ▼▼▼
+  const { data: initialPostsData } = await supabase
+    .from('posts')
+    .select('*, profiles!inner(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)))')
+    .eq('user_id', profile.id)
+    .order('created_at', { ascending: false })
+    .range(0, POSTS_PER_PAGE - 1)
+  
+  const initialPosts: PostWithRelations[] = (initialPostsData ?? []).map((post) => ({
+    ...post,
+    is_liked_by_user:
+      !!loggedInUser && Array.isArray(post.likes)
+        ? post.likes.some((like: { user_id: string }) => like.user_id === loggedInUser.id)
+        : false,
+  }))
 
   return (
-    <div className="w-full max-w-lg">
-      {user && userProfile && (
-        <div className="border-b border-gray-200">
-          <CreatePostForm userProfile={userProfile} />
+    <div className="w-full">
+      {/* (プロフィールヘッダーなどの表示部分は一切変更ありません) */}
+      <div className="relative h-48 w-full bg-gray-200">{profile.header_image_url && (<Image src={profile.header_image_url} alt="Header" fill className="object-cover" priority />)}</div>
+      <div className="mx-auto w-full max-w-lg -translate-y-16 px-4">
+        <div className="flex items-end justify-between">
+          <div className="relative h-32 w-32 flex-shrink-0 rounded-full border-4 border-white bg-white">{profile.avatar_url ? (<Image src={profile.avatar_url} alt={profile.nickname} fill className="rounded-full object-cover" priority />) : (<UserCircleIcon className="text-gray-400" />)}</div>
+          <div className="pb-2">{loggedInUser?.id === profile.id ? (<Link href={`/${profile.user_id_text}/edit`} className="rounded-full border px-4 py-2 text-sm font-bold">プロフィールを編集</Link>) : (<FollowButton targetUserId={profile.id} isFollowing={isFollowing} />)}</div>
         </div>
-      )}
-      <div className="w-full px-4 md:hidden">
-        <Tab
-          currentTab={sp.tab || 'all'}
-          currentArtistId={sp.artistId}
-          favoriteArtists={favoriteArtists}
-        />
+        <div className="mt-2"><h1 className="text-2xl font-bold">{profile.nickname}</h1><p className="text-sm text-gray-500">@{profile.user_id_text}</p></div>
+        <div className="mt-4 whitespace-pre-wrap text-sm">{profile.bio}</div>
+        <div className="mt-8 space-y-8">{favoriteArtistTags.length > 0 && (<div><h3 className="mb-2 text-sm font-bold text-gray-600">Favorite Artists</h3><div className="flex flex-wrap gap-2">{favoriteArtistTags.map((tag) => (<InteractiveTag key={tag.id} tag={tag} />))}</div></div>)}{favoriteSongTags.length > 0 && (<div><h3 className="mb-2 text-sm font-bold text-gray-600">Favorite Songs</h3><div className="flex flex-wrap gap-2">{favoriteSongTags.map((tag) => (<InteractiveTag key={tag.id} tag={tag} />))}</div></div>)}</div>
       </div>
+      <div className="mx-auto w-full max-w-lg">
+        <div className="py-8"><h2 className="mb-4 px-4 text-xl font-bold">参戦したライブ</h2><div className="space-y-2">{attendedLives.length > 0 ? (attendedLives.map((live) => (<div key={live.id} className="rounded-md p-4 hover:bg-gray-50"><p className="text-sm text-gray-500">{live.live_date}</p><h3 className="font-bold text-gray-800">{live.name}</h3><p className="text-sm text-gray-600">{live.artists?.name}</p></div>))) : (<p className="px-4 text-sm text-gray-500">まだ参戦したライブはありません。</p>)}</div></div>
 
-      {errorMessage ? (
-        <p className="p-4 text-red-500">{errorMessage}</p>
-      ) : (
-        // ▼▼▼ 投稿リストの表示を、新しいPostList部品に任せます ▼▼▼
-        <PostList initialPosts={initialPosts} userId={user?.id} />
-      )}
+        {/* ▼▼▼【重要】投稿一覧の表示を、新しいPostList部品に置き換えます ▼▼▼ */}
+        <div className="w-full border-t border-gray-200 pt-4">
+          <h2 className="mb-4 px-4 text-xl font-bold">投稿</h2>
+          <PostList 
+            initialPosts={initialPosts} 
+            userId={loggedInUser?.id}
+            profileUserId={profile.id} // 表示しているプロフィールIDを渡す
+          />
+        </div>
+        {/* ▲▲▲ */}
+      </div>
     </div>
   )
 }
