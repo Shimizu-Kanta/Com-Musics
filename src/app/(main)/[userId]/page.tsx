@@ -31,14 +31,15 @@ type FavoriteArtistRow = { artists: Artist | null }
 
 export const dynamic = 'force-dynamic'
 
-export default async function ProfilePage({ params }: { params: PageParams }) {
+export default async function ProfilePage({ params }: { params: Promise<PageParams> }) {
+  const { userId } = await params
   const supabase = createClient()
   const { data: { user: loggedInUser } } = await supabase.auth.getUser()
 
   const { data: profile } = await supabase
     .from('profiles')
     .select('*')
-    .eq('user_id_text', params.userId)
+    .eq('user_id_text', userId)
     .single()
 
   if (!profile) {
