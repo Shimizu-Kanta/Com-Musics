@@ -137,32 +137,52 @@ export async function fetchPosts({
     .from('posts')
     .select('*, profiles!inner(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)))')
     .order('created_at', { ascending: false })
-    .range(from, to)
-
+  
+  // ▼▼▼【重要】ここからが今回の主な修正点です ▼▼▼
   // --- どのタイムラインかによって、問い合わせ内容を切り替える ---
   if (searchQuery) {
-    query = query.ilike('content', `%${searchQuery}%`)
+    query = query.ilike('content', `%${searchQuery}%`).range(from, to)
   } 
   else if (profileUserId) {
-    query = query.eq('user_id', profileUserId)
+    query = query.eq('user_id', profileUserId).range(from, to)
   }
   else {
     if (tab === 'following' && userId) {
       const { data: followingIdsData } = await supabase.from('followers').select('following_id').eq('follower_id', userId)
       const followingIds = followingIdsData?.map(f => f.following_id) ?? []
       if (followingIds.length > 0) {
-        query = query.in('user_id', followingIds)
+        query = query.in('user_id', followingIds).range(from, to)
       } else {
         return []
       }
     } else if (artistId) {
-      const { data: postIdsData } = await supabase.from('tags').select('post_id').eq('artist_id', artistId)
-      const postIds = postIdsData?.map((p) => p.post_id) ?? []
-      if (postIds.length > 0) {
-        query = query.in('id', postIds)
+      // --- 賢い調査方法をここに実装 ---
+      const allPostIds = new Set<number>()
+      // 1. アーティストが直接タグ付けされた投稿
+      const { data: directTags } = await supabase.from('tags').select('post_id').eq('artist_id', artistId)
+      directTags?.forEach(t => allPostIds.add(t.post_id))
+      // 2. アーティストの楽曲がタグ付けされた投稿
+      const { data: songIds } = await supabase.from('songs').select('id').eq('artist_id', artistId)
+      if (songIds && songIds.length > 0) {
+        const { data: songTags } = await supabase.from('tags').select('post_id').in('song_id', songIds.map(s => s.id))
+        songTags?.forEach(t => allPostIds.add(t.post_id))
+      }
+      // 3. アーティストのライブがタグ付けされた投稿
+      const { data: liveIds } = await supabase.from('live_artists').select('live_id').eq('artist_id', artistId)
+      if (liveIds && liveIds.length > 0) {
+        const { data: liveTags } = await supabase.from('tags').select('post_id').in('live_id', liveIds.map(l => l.live_id))
+        liveTags?.forEach(t => allPostIds.add(t.post_id))
+      }
+      
+      const uniquePostIds = Array.from(allPostIds)
+      if (uniquePostIds.length > 0) {
+        query = query.in('id', uniquePostIds).range(from, to)
       } else {
         return []
       }
+    } else {
+      // 通常のタイムライン
+      query = query.range(from, to)
     }
   }
 

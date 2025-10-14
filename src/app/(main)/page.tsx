@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { type PostWithRelations, type Artist, type Profile } from '@/types'
 import Tab from '@/components/post/Tab'
 import CreatePostForm from '@/components/post/CreatePostForm'
-import PostList from '@/components/post/PostList' // 無限スクロール用の新しい部品をインポート
+import PostList from '@/components/post/PostList'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +12,6 @@ type SearchParams = {
 }
 
 type FollowingRow = { following_id: string }
-type TagRow = { post_id: number }
 type FavoriteArtistsJoinRow =
   | { artists: Artist | null }
   | { artists: Artist[] | null }
@@ -28,26 +27,15 @@ export default async function HomePage({
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  // --- ログインユーザーのプロフィール情報 ---
   let userProfile: Profile | null = null
   if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single()
+    const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
     userProfile = profile
   }
 
-  // --- お気に入りアーティストの情報 ---
   let favoriteArtists: Artist[] = []
   if (user) {
-    const { data: favArtistData } = await supabase
-      .from('favorite_artists')
-      .select('artists(*)')
-      .eq('user_id', user.id)
-      .order('sort_order')
-    
+    const { data: favArtistData } = await supabase.from('favorite_artists').select('artists(*)').eq('user_id', user.id).order('sort_order')
     if (favArtistData) {
       favoriteArtists = favArtistData
         .map((item: FavoriteArtistsJoinRow) => item.artists)
@@ -56,7 +44,6 @@ export default async function HomePage({
     }
   }
 
-  // --- 最初の投稿20件だけを取得する ---
   let initialPosts: PostWithRelations[] = []
   let errorMessage: string | null = null
   try {
@@ -64,32 +51,45 @@ export default async function HomePage({
       .from('posts')
       .select('*, profiles!inner(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)))')
       .order('created_at', { ascending: false })
-      .range(0, POSTS_PER_PAGE - 1) // 最初の20件に絞る
-
-    let shouldSkipQuery = false
-
+      
+    // ▼▼▼【重要】ここにも賢い調査方法を実装します ▼▼▼
+    let shouldSkipQuery = false;
+    
     if (sp.tab === 'following' && user) {
       const { data: followingIdsData } = await supabase.from('followers').select('following_id').eq('follower_id', user.id)
       const followingIds = (followingIdsData as FollowingRow[] | null)?.map(f => f.following_id) ?? []
       if (followingIds.length > 0) {
         query = query.in('user_id', followingIds)
       } else {
-        initialPosts = []
         shouldSkipQuery = true
       }
     } else if (sp.artistId) {
-      const { data: postIdsData } = await supabase.from('tags').select('post_id').eq('artist_id', sp.artistId)
-      const postIds = (postIdsData as TagRow[] | null)?.map((p) => p.post_id) ?? []
-      if (postIds.length > 0) {
-        query = query.in('id', postIds)
+      const allPostIds = new Set<number>()
+      const { data: directTags } = await supabase.from('tags').select('post_id').eq('artist_id', sp.artistId)
+      directTags?.forEach(t => allPostIds.add(t.post_id))
+      const { data: songIds } = await supabase.from('songs').select('id').eq('artist_id', sp.artistId)
+      if (songIds && songIds.length > 0) {
+        const { data: songTags } = await supabase.from('tags').select('post_id').in('song_id', songIds.map(s => s.id))
+        songTags?.forEach(t => allPostIds.add(t.post_id))
+      }
+      const { data: liveIds } = await supabase.from('live_artists').select('live_id').eq('artist_id', sp.artistId)
+      if (liveIds && liveIds.length > 0) {
+        const { data: liveTags } = await supabase.from('tags').select('post_id').in('live_id', liveIds.map(l => l.live_id))
+        liveTags?.forEach(t => allPostIds.add(t.post_id))
+      }
+      
+      const uniquePostIds = Array.from(allPostIds)
+      if (uniquePostIds.length > 0) {
+        query = query.in('id', uniquePostIds)
       } else {
-        initialPosts = []
         shouldSkipQuery = true
       }
     }
     
-    if (!shouldSkipQuery) {
-      const { data, error } = await query
+    if (shouldSkipQuery) {
+      initialPosts = []
+    } else {
+      const { data, error } = await query.range(0, POSTS_PER_PAGE - 1)
       if (error) throw error
       initialPosts = (data ?? []).map((post) => ({
         ...post,
@@ -99,6 +99,7 @@ export default async function HomePage({
             : false,
       }))
     }
+    
   } catch (err) {
     console.error('Error fetching initial posts:', err)
     errorMessage = '投稿の読み込みに失敗しました。'
@@ -118,11 +119,9 @@ export default async function HomePage({
           favoriteArtists={favoriteArtists}
         />
       </div>
-
       {errorMessage ? (
         <p className="p-4 text-red-500">{errorMessage}</p>
       ) : (
-        // ▼▼▼ 投稿リストの表示を、新しいPostList部品に任せます ▼▼▼
         <PostList initialPosts={initialPosts} userId={user?.id} />
       )}
     </div>
