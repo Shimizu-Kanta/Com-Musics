@@ -71,9 +71,28 @@ export const searchTracks = async (query: string) => {
         'Accept-Language': 'ja-JP,ja;q=0.9',
       },
     }
-  )
+  }
 
-  const data = await response.json()
+  // 4) ISRC（無ければ id）で重複除去しつつ10件に整形
+  const seen = new Set<string>();
+  const out = [];
+  for (const t of top) {
+    const full = byId.get(t.id) as SpotifyTrackFull | undefined;
+    const key = full?.external_ids?.isrc || t.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      id: t.id,
+      name: t.name,
+      artist: t.artists.map(a => a.name).join(', '),
+      artistId: t.artists[0]?.id,
+      artistName: t.artists[0]?.name,
+      albumArtUrl: t.album.images?.[0]?.url,
+    });
+    if (out.length >= 10) break;
+  }
+  return out;
+};
 
   // アプリで扱いやすいように、必要な情報だけを抽出して返します
   return data.tracks.items.map((track: SpotifyTrack) => ({
