@@ -104,7 +104,8 @@ const setCachedISRC = (isrc: string, track: SpotifyTrackRaw) =>
 const batchSearchByISRCPreferJP = async (isrcs: string[], token: string) => {
   const result = new Map<string, SpotifyTrackRaw>()
 
-  const targets = isrcs.filter(i => !getCachedISRC(i))
+  // キャッシュ済みは戻す
+  const targets = isrcs.filter((i) => !getCachedISRC(i))
   if (targets.length === 0) {
     for (const i of isrcs) {
       const t = getCachedISRC(i)
@@ -113,40 +114,60 @@ const batchSearchByISRCPreferJP = async (isrcs: string[], token: string) => {
     return result
   }
 
+  // 8件ずつ
   const chunks: string[][] = []
   for (let i = 0; i < targets.length; i += 8) chunks.push(targets.slice(i, i + 8))
 
   for (const ch of chunks) {
-    // 1) JPで OR 検索
-    const q = ch.map(i => `isrc:${i}`).join(' OR ')
-    const resJP = await sFetch(`${SEARCH_ENDPOINT}?q=${encodeURIComponent(q)}&type=track&limit=50`, token)
-    const dataJP = await resJP.json()
+    // 1) JP で OR 検索
+    const q = ch.map((i) => `isrc:${i}`).join(' OR ')
+    const resJP = await sFetch(
+      `${SEARCH_ENDPOINT}?q=${encodeURIComponent(q)}&type=track&limit=50`,
+      token
+    )
+    const dataJP: {
+      tracks?: { items?: SpotifyTrackRaw[] }
+    } = await resJP.json()
     let itemsJP: SpotifyTrackRaw[] = dataJP?.tracks?.items ?? []
 
-    // external_ids 補完
-    if (itemsJP.length && itemsJP.some(t => !t.external_ids?.isrc)) {
-      const filled = await getTracksFull(itemsJP.map(t => t.id), token)
-      const byId = new Map(filled.map(f => [f.id, f]))
-      itemsJP = itemsJP.map(t => byId.get(t.id) ?? t)
+    // external_ids の欠落補完
+    if (itemsJP.length && itemsJP.some((t) => !t.external_ids?.isrc)) {
+      const filled = await getTracksFull(itemsJP.map((t) => t.id), token)
+      const byId = new Map<string, SpotifyTrackRaw>(
+        filled.map((f) => [f.id, f] as const)
+      )
+      itemsJP = itemsJP.map((t) => byId.get(t.id) ?? t)
     }
 
     for (const i of ch) {
-      const jpCandidates = itemsJP.filter(t => t.external_ids?.isrc === i)
-      let best = jpCandidates.find(hasJPInTrack) || jpCandidates[0]
+      const jpCandidates = itemsJP.filter((t) => t.external_ids?.isrc === i)
+      const jpBest = jpCandidates.find(hasJPInTrack)
+      let best: SpotifyTrackRaw | undefined = jpBest
 
-      // 2) グローバル検索 → JPで再生可 & 日本語を優先
-      if (!best) {
+      // JP結果に日本語が無い/見つからない → グローバル再検索へ
+      if (!jpBest) {
         const resG = await sFetch(
           `${SEARCH_ENDPOINT}?q=${encodeURIComponent(`isrc:${i}`)}&type=track&limit=50`,
           token,
           /* forceNoMarket */ true
         )
-        const dataG = await resG.json()
+        const dataG: {
+          tracks?: { items?: SpotifyTrackRaw[] }
+        } = await resG.json()
         const itemsG: SpotifyTrackRaw[] = dataG?.tracks?.items ?? []
+
         const gJPCanPlay = itemsG.filter(
-          t => Array.isArray(t.available_markets) && t.available_markets.includes('JP')
+          (t) =>
+            Array.isArray(t.available_markets) &&
+            t.available_markets.includes('JP')
         )
-        best = gJPCanPlay.find(hasJPInTrack) || itemsG.find(hasJPInTrack) || gJPCanPlay[0] || itemsG[0]
+
+        best =
+          gJPCanPlay.find(hasJPInTrack) ||
+          itemsG.find(hasJPInTrack) ||
+          gJPCanPlay[0] ||
+          jpCandidates[0] ||
+          itemsG[0]
       }
 
       if (best) {
@@ -156,6 +177,7 @@ const batchSearchByISRCPreferJP = async (isrcs: string[], token: string) => {
     }
   }
 
+  // 既存キャッシュも戻す
   for (const i of isrcs) {
     if (!result.has(i)) {
       const t = getCachedISRC(i)
