@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
+// (toggleAttendance関数は、live_artistsテーブルと無関係なので変更なし)
 export async function toggleAttendance(liveId: number) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -24,43 +25,53 @@ export async function toggleAttendance(liveId: number) {
   }
 }
 
-// ▼▼▼ 2つのcreateLive関数を、ここに統合しました ▼▼▼
+// ▼▼▼【重要】このcreateLive関数を、本来のシンプルな形に戻します ▼▼▼
 export async function createLive(previousState: { error: string } | null, formData: FormData) {
   const supabase = createClient()
 
-  // ログインユーザーを取得
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return { error: 'ライブを登録するにはログインが必要です。' }
   }
   
-  // フォームからデータを取得
   const name = formData.get('name') as string
   const artistId = formData.get('artistId') as string
+  const artistName = formData.get('artistName') as string
+  const artistImageUrl = formData.get('artistImageUrl') as string | null
   const venue = formData.get('venue') as string
   const date = formData.get('date') as string
 
-  // バリデーション
-  if (!name || !artistId || !venue || !date) {
+  if (!name || !artistId || !artistName || !venue || !date) {
     return { error: 'すべてのフィールドを入力してください。' }
   }
 
   try {
+    // 1. アーティスト情報を artists テーブルに登録（または更新）
+    const { error: artistError } = await supabase
+      .from('artists')
+      .upsert({
+        id: artistId,
+        name: artistName,
+        image_url: artistImageUrl,
+      }, { onConflict: 'id' })
+    if (artistError) throw artistError
+
+    // 2. ライブ情報を lives テーブルに登録 (artist_id を含める)
     const { error: liveError } = await supabase
       .from('lives')
       .insert({
-        name,
-        artist_id: artistId,
-        venue,
+        name: name,
+        venue: venue,
         live_date: date,
-        created_by: user.id, // 登録者IDを追加
+        created_by: user.id,
+        artist_id: artistId, // artist_id を lives テーブルに直接保存
       })
-    
     if (liveError) throw liveError
 
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : '不明なエラーが発生しました。'
-    return { error: `ライブの作成に失敗しました: ${message}` }
+  } catch (error) {
+    console.error('Create live error:', error)
+    const message = error instanceof Error ? error.message : 'ライブの登録中に予期せぬエラーが発生しました。'
+    return { error: message }
   }
 
   revalidatePath('/live')
