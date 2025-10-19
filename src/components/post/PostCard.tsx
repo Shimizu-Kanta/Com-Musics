@@ -56,6 +56,17 @@ function MusicLinkModal({ tag, onClose }: { tag: TagWithRelations; onClose: () =
   )
 }
 
+const formatDateTime = (dateString: string) => {
+  const date = new Date(dateString);
+  const year = date.getFullYear();
+  // getMonth()は0から始まるため+1し、padStartで2桁に揃える
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}/${month}/${day} ${hours}:${minutes}`;
+};
+
 export default function PostCard({ post }: { post: PostWithRelations }) {
   const [modalTag, setModalTag] = useState<TagWithRelations | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -90,7 +101,11 @@ export default function PostCard({ post }: { post: PostWithRelations }) {
 
           <div>
             <h3 className="font-bold text-gray-900 hover:underline">{profile.nickname}</h3>
-            <p className="text-sm text-gray-500">@{profile.user_id_text}</p>
+            <p className="text-sm text-gray-500">
+              <span>@{profile.user_id_text}</span>
+              <span className='mx-1'>  </span>
+              <span>{formatDateTime(post.created_at)}</span>
+            </p>
           </div>
         </div>
       </Link>

@@ -9,6 +9,7 @@ import { type Tag } from '@/components/post/TagSearch'
 import Image from 'next/image'
 import PostList from '@/components/post/PostList'
 import { type PostWithRelations } from '@/types'
+import AttendedLivesSection from '@/components/profile/AttendedLivesSection'
 
 const POSTS_PER_PAGE = 20
 
@@ -120,7 +121,7 @@ export default async function ProfilePage({ params }: { params: Promise<PagePara
         </div>
         <div className="mt-2"><h1 className="text-2xl font-bold">{profile.nickname}</h1><p className="text-sm text-gray-500">@{profile.user_id_text}</p></div>
         
-        {/* 3. フォロー中とフォロワーの数を表示 */}
+        {/* 3. フォロー中とフォロワーの数、参戦したライブ数を表示 */}
         <div className="mt-4 flex space-x-4 text-sm text-gray-600">
           <Link href={`/${profile.user_id_text}/following`} className="hover:underline">
             <span className="font-bold text-black">{followingCount ?? 0}</span> フォロー中
@@ -128,13 +129,16 @@ export default async function ProfilePage({ params }: { params: Promise<PagePara
           <Link href={`/${profile.user_id_text}/followers`} className="hover:underline">
             <span className="font-bold text-black">{followersCount ?? 0}</span> フォロワー
           </Link>
+          <p>
+            <span className="font-bold text-black">{attendedLives.length}</span> 参戦したライブ
+          </p>
         </div>
 
         <div className="mt-4 whitespace-pre-wrap text-sm">{profile.bio}</div>
         <div className="mt-8 space-y-8">{favoriteArtistTags.length > 0 && (<div><h3 className="mb-2 text-sm font-bold text-gray-600">Favorite Artists</h3><div className="flex flex-wrap gap-2">{favoriteArtistTags.map((tag) => (<InteractiveTag key={tag.id} tag={tag} />))}</div></div>)}{favoriteSongTags.length > 0 && (<div><h3 className="mb-2 text-sm font-bold text-gray-600">Favorite Songs</h3><div className="flex flex-wrap gap-2">{favoriteSongTags.map((tag) => (<InteractiveTag key={tag.id} tag={tag} />))}</div></div>)}</div>
       </div>
       <div className="mx-auto w-full max-w-lg">
-        <div className="py-8"><h2 className="mb-4 px-4 text-xl font-bold">参戦したライブ</h2><div className="space-y-2">{attendedLives.length > 0 ? (attendedLives.map((live) => (<div key={live.id} className="rounded-md p-4 hover:bg-gray-50"><p className="text-sm text-gray-500">{live.live_date}</p><h3 className="font-bold text-gray-800">{live.name}</h3><p className="text-sm text-gray-600">{live.artists?.name}</p></div>))) : (<p className="px-4 text-sm text-gray-500">まだ参戦したライブはありません。</p>)}</div></div>
+        <AttendedLivesSection attendedLives={attendedLives} />
         <div className="w-full border-t border-gray-200 pt-4">
           <h2 className="mb-4 px-4 text-xl font-bold">投稿</h2>
           <PostList 
