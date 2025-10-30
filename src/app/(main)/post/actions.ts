@@ -1,3 +1,4 @@
+// src/app/(main)/post/actions.ts
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
@@ -8,7 +9,7 @@ import { type Tag } from '@/components/post/TagSearch'
 
 const POSTS_PER_PAGE = 20;
 
-// (searchMusic, searchArtistsAction, toggleLike 関数は変更ありません)
+// Spotify検索関数
 export async function searchMusic(query: string) {
   if (!query) return []
   try {
@@ -19,6 +20,7 @@ export async function searchMusic(query: string) {
     return []
   }
 }
+
 export async function searchArtistsAction(query: string) {
   if (!query) return []
   try {
@@ -29,6 +31,8 @@ export async function searchArtistsAction(query: string) {
     return []
   }
 }
+
+// いいね機能
 export async function toggleLike(postId: number) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -49,15 +53,34 @@ export async function toggleLike(postId: number) {
   revalidatePath('/')
 }
 
-// ▼▼▼【重要】createPost関数を、2つの引数を受け取る正しい形に修正します ▼▼▼
+// ▼▼▼ 投稿作成（動画タグ対応版） ▼▼▼
 export async function createPost(content: string, tags: Tag[]) {
   const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   if (!user || !content.trim() || content.length > 600) {
     return
   }
 
-  // 1. 投稿をpostsテーブルに挿入
+  // ▼ 投稿直後にタグの内容をサーバーログへ（any 不使用）
+  console.log('=== createPost Debug ===')
+  console.log('content length:', content.length)
+  console.log(
+    'tags:',
+    tags.map((t) => ({
+      type: t.type,
+      id: t.id,
+      name: t.name,
+      // タグ種別ごとに存在し得るフィールドを安全に参照
+      artistId: 'artistId' in t ? t.artistId : undefined,
+      artistName: 'artistName' in t ? t.artistName : undefined,
+      liveDate: 'liveDate' in t ? t.liveDate : undefined,
+      imageUrl: 'imageUrl' in t ? t.imageUrl : undefined,
+    })),
+  )
+
+  // 1. 投稿作成
   const { data: postData, error: postError } = await supabase
     .from('posts')
     .insert({ content, user_id: user.id })
@@ -69,32 +92,50 @@ export async function createPost(content: string, tags: Tag[]) {
     return
   }
 
-  // 2. タグが存在する場合、関連テーブルにデータを保存
+  // 2. タグ保存（既存ロジックそのまま）
   if (tags && tags.length > 0) {
     for (const tag of tags) {
       if (tag.type === 'song') {
-        const artistToInsert: ArtistInsert = { id: tag.artistId!, name: tag.artistName! }
+        const artistToInsert: ArtistInsert = {
+          id: tag.artistId!,
+          name: tag.artistName!,
+        }
         await supabase.from('artists').upsert(artistToInsert)
-        const songToInsert: SongInsert = { id: tag.id, name: tag.name, artist_id: tag.artistId!, album_art_url: tag.imageUrl }
+        const songToInsert: SongInsert = {
+          id: tag.id,
+          name: tag.name,
+          artist_id: tag.artistId!,
+          album_art_url: tag.imageUrl,
+        }
         await supabase.from('songs').upsert(songToInsert)
         const tagToInsert: TagInsert = { post_id: postData.id, song_id: tag.id }
         await supabase.from('tags').insert(tagToInsert)
       } else if (tag.type === 'artist') {
-        const artistToInsert: ArtistInsert = { id: tag.id, name: tag.name, image_url: tag.imageUrl }
+        const artistToInsert: ArtistInsert = {
+          id: tag.id,
+          name: tag.name,
+          image_url: tag.imageUrl,
+        }
         await supabase.from('artists').upsert(artistToInsert)
         const tagToInsert: TagInsert = { post_id: postData.id, artist_id: tag.id }
         await supabase.from('tags').insert(tagToInsert)
       } else if (tag.type === 'live') {
-        const tagToInsert: TagInsert = { post_id: postData.id, live_id: parseInt(tag.id, 10) }
+        const tagToInsert: TagInsert = {
+          post_id: postData.id,
+          live_id: parseInt(String(tag.id), 10),
+        }
+        await supabase.from('tags').insert(tagToInsert)
+      } else if (tag.type === 'video') {
+        const tagToInsert: TagInsert = { post_id: postData.id, video_id: tag.id }
         await supabase.from('tags').insert(tagToInsert)
       }
     }
   }
 
+  // 3. パス再検証（ISR/SSRの再取得トリガ）
   revalidatePath('/')
 }
-
-// (searchLivesAction 関数は変更ありません)
+// ライブ検索
 export async function searchLivesAction(query: string) {
   'use server'
   if (!query) return []
@@ -113,6 +154,7 @@ export async function searchLivesAction(query: string) {
   return data || []
 }
 
+// ▼▼▼ 投稿取得（動画タグ対応版） ▼▼▼
 export async function fetchPosts({ 
   page = 1, 
   userId, 
@@ -133,22 +175,39 @@ export async function fetchPosts({
   const from = page * POSTS_PER_PAGE;
   const to = from + POSTS_PER_PAGE - 1;
 
+  // ▼▼▼【修正】動画関連テーブルをSELECT文に追加 ▼▼▼
   let query = supabase
     .from('posts')
-    .select('*, profiles!inner(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)))')
+    .select(`
+      *, 
+      profiles!inner(*), 
+      likes(user_id), 
+      tags(
+        *, 
+        songs(*, artists(*)), 
+        artists(*), 
+        lives(*, artists(*)),
+        videos_test(*, artists_test(*))
+      )
+    `)
     .order('created_at', { ascending: false })
   
-  // ▼▼▼【重要】ここからが今回の主な修正点です ▼▼▼
-  // --- どのタイムラインかによって、問い合わせ内容を切り替える ---
+  // タイムラインの種類によって問い合わせ内容を切り替え
   if (searchQuery) {
+    // 検索クエリがある場合
     query = query.ilike('content', `%${searchQuery}%`).range(from, to)
   } 
   else if (profileUserId) {
+    // 特定ユーザーのプロフィールページ
     query = query.eq('user_id', profileUserId).range(from, to)
   }
   else {
     if (tab === 'following' && userId) {
-      const { data: followingIdsData } = await supabase.from('followers').select('following_id').eq('follower_id', userId)
+      // フォロー中タブ
+      const { data: followingIdsData } = await supabase
+        .from('followers')
+        .select('following_id')
+        .eq('follower_id', userId)
       const followingIds = followingIdsData?.map(f => f.following_id) ?? []
       if (followingIds.length > 0) {
         query = query.in('user_id', followingIds).range(from, to)
@@ -156,22 +215,53 @@ export async function fetchPosts({
         return []
       }
     } else if (artistId) {
-      // --- 賢い調査方法をここに実装 ---
+      // ▼▼▼【修正】アーティストページ：動画タグも含める ▼▼▼
       const allPostIds = new Set<number>()
+      
       // 1. アーティストが直接タグ付けされた投稿
-      const { data: directTags } = await supabase.from('tags').select('post_id').eq('artist_id', artistId)
+      const { data: directTags } = await supabase
+        .from('tags')
+        .select('post_id')
+        .eq('artist_id', artistId)
       directTags?.forEach(t => allPostIds.add(t.post_id))
+      
       // 2. アーティストの楽曲がタグ付けされた投稿
-      const { data: songIds } = await supabase.from('songs').select('id').eq('artist_id', artistId)
+      const { data: songIds } = await supabase
+        .from('songs')
+        .select('id')
+        .eq('artist_id', artistId)
       if (songIds && songIds.length > 0) {
-        const { data: songTags } = await supabase.from('tags').select('post_id').in('song_id', songIds.map(s => s.id))
+        const { data: songTags } = await supabase
+          .from('tags')
+          .select('post_id')
+          .in('song_id', songIds.map(s => s.id))
         songTags?.forEach(t => allPostIds.add(t.post_id))
       }
+      
       // 3. アーティストのライブがタグ付けされた投稿
-      const { data: liveIds } = await supabase.from('live_artists').select('live_id').eq('artist_id', artistId)
+      const { data: liveIds } = await supabase
+        .from('live_artists')
+        .select('live_id')
+        .eq('artist_id', artistId)
       if (liveIds && liveIds.length > 0) {
-        const { data: liveTags } = await supabase.from('tags').select('post_id').in('live_id', liveIds.map(l => l.live_id))
+        const { data: liveTags } = await supabase
+          .from('tags')
+          .select('post_id')
+          .in('live_id', liveIds.map(l => l.live_id))
         liveTags?.forEach(t => allPostIds.add(t.post_id))
+      }
+      
+      // 4. 【新規追加】アーティストの動画がタグ付けされた投稿
+      const { data: videoIds } = await supabase
+        .from('videos_test')
+        .select('id')
+        .eq('artist_id', artistId)
+      if (videoIds && videoIds.length > 0) {
+        const { data: videoTags } = await supabase
+          .from('tags')
+          .select('post_id')
+          .in('video_id', videoIds.map(v => v.id))
+        videoTags?.forEach(t => allPostIds.add(t.post_id))
       }
       
       const uniquePostIds = Array.from(allPostIds)
@@ -187,6 +277,35 @@ export async function fetchPosts({
   }
 
   const { data, error } = await query;
+  
+  // ▼▼▼ デバッグ用ログ（any → unknown + 型安全な参照に変更） ▼▼▼
+  console.log('=== fetchPosts Debug ===')
+  console.log('Query params:', { page, userId, tab, artistId, profileUserId, searchQuery })
+  console.log('Fetched data:', JSON.stringify(data, null, 2))
+  console.log('Error:', error)
+  
+  if (data && data.length > 0) {
+    data.forEach((post, index) => {
+      console.log(`Post ${index} tags:`, post.tags)
+      post.tags?.forEach((tag: unknown, tagIndex: number) => {
+        const t = tag as Record<string, unknown>
+        const dbg = {
+          song_id: typeof t['song_id'] === 'number' ? (t['song_id'] as number) : undefined,
+          artist_id: typeof t['artist_id'] === 'string' ? (t['artist_id'] as string) : undefined,
+          live_id: typeof t['live_id'] === 'number' ? (t['live_id'] as number) : undefined,
+          video_id:
+            typeof t['video_id'] === 'number' || typeof t['video_id'] === 'string'
+              ? (t['video_id'] as number | string)
+              : undefined,
+          has_videos_test: typeof t['videos_test'] !== 'undefined',
+        }
+        console.log(`  Tag ${tagIndex}:`, dbg)
+      })
+    })
+  }
+  console.log('========================')
+  // ▲▲▲ デバッグ用ログここまで ▲▲▲
+  
   if (error) {
     console.error('Error fetching more posts:', error)
     return []

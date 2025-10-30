@@ -4,8 +4,8 @@ import { useState, useRef, useTransition } from 'react'
 import Image from 'next/image'
 import { createPost } from '@/app/(main)/post/actions'
 import TagSearch, { type Tag } from './TagSearch'
-import VideoTagModal from './VideoTagModal' // 詳細フォーム
-import { getVideoInfo } from './videoActions' // 裏方のアクション
+import VideoTagModal from './VideoTagModal'
+import { getVideoInfo } from './videoActions'
 
 import { UserCircleIcon, XCircleIcon } from '@heroicons/react/24/solid'
 import type { Profile } from '@/types'
@@ -27,11 +27,14 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
   const [tags, setTags] = useState<Tag[]>([])
   const formRef = useRef<HTMLFormElement>(null)
 
+  // タグ検索モーダルの状態
   const [isTagSearchOpen, setIsTagSearchOpen] = useState(false)
+  
+  // 動画タグモーダルの状態
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
-  const [pendingVideoData, setPendingVideoData] =
-    useState<PendingVideoData | null>(null)
+  const [pendingVideoData, setPendingVideoData] = useState<PendingVideoData | null>(null)
 
+  // 通常のタグ（曲/アーティスト/ライブ）が選択されたとき
   const handleTagSelect = (tag: Tag) => {
     if (!tags.some((t) => t.id === tag.id && t.type === tag.type)) {
       setTags([...tags, tag])
@@ -39,6 +42,7 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
     setIsTagSearchOpen(false)
   }
 
+  // 動画URLが入力されたとき（TagSearchから呼ばれる）
   const handleVideoUrlSubmit = async (url: string) => {
     startTransition(async () => {
       setIsTagSearchOpen(false)
@@ -57,6 +61,7 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
     })
   }
 
+  // 動画タグが完成したとき（VideoTagModalから呼ばれる）
   const handleVideoTagSelect = (videoTag: Tag) => {
     if (videoTag.type !== 'video') return
     if (!tags.some((t) => t.id === videoTag.id && t.type === 'video')) {
@@ -66,6 +71,7 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
     setPendingVideoData(null)
   }
 
+  // タグを削除
   const removeTag = (tagToRemove: Tag) => {
     setTags(
       tags.filter(
@@ -74,6 +80,7 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
     )
   }
 
+  // 投稿実行
   const handleSubmit = async () => {
     if (!content.trim()) return
     startTransition(async () => {
@@ -86,7 +93,7 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
 
   return (
     <div className="w-full max-w-lg p-4 bg-white">
-      {/* ▼▼▼ 外側のフォームはここから ▼▼▼ */}
+      {/* メインフォーム */}
       <form action={handleSubmit} ref={formRef}>
         <div className="flex justify-between items-start gap-4">
           {/* アバター */}
@@ -122,6 +129,7 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
                     key={`${tag.type}-${tag.id}`}
                     className="flex items-center bg-gray-100 text-gray-800 text-sm font-medium pl-2.5 pr-1 py-0.5 rounded-full"
                   >
+                    {/* 画像があるタグ（曲/アーティスト/動画）のサムネイル表示 */}
                     {(tag.type === 'video' ||
                       tag.type === 'song' ||
                       tag.type === 'artist') &&
@@ -135,6 +143,19 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
                         />
                       )}
                     <span>{tag.name}</span>
+                    {/* アーティスト名を表示（曲/動画の場合） */}
+                    {(tag.type === 'song' || tag.type === 'video') && tag.artistName && (
+                      <span className="text-xs text-gray-500 ml-1">
+                        - {tag.artistName}
+                      </span>
+                    )}
+                    {/* ライブの場合は会場と日付を表示 */}
+                    {tag.type === 'live' && (
+                      <span className="text-xs text-gray-500 ml-1">
+                        {tag.venue && `@ ${tag.venue}`}
+                        {tag.liveDate && ` (${tag.liveDate})`}
+                      </span>
+                    )}
                     <button
                       type="button"
                       onClick={() => removeTag(tag)}
@@ -147,7 +168,7 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
               </div>
             )}
 
-            {/* --- ボタンエリア --- */}
+            {/* ボタンエリア */}
             <div className="mt-2 flex items-center justify-between">
               <div className="relative inline-block shrink-0">
                 <button
@@ -158,8 +179,7 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
                   タグを追加
                 </button>
 
-                {/* 1. 最初のモーダル（TagSearch） */}
-                {/* これは <form> の内側にあっても問題ありません */}
+                {/* タグ検索モーダル（formの内側） */}
                 {isTagSearchOpen && (
                   <div className="absolute left-0 top-full mt-2 w-80 min-w-[20rem] max-w-[90vw] z-50">
                     <TagSearch
@@ -169,15 +189,9 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
                     />
                   </div>
                 )}
-
-                {/* ▼▼▼【重要】▼▼▼
-                  2つ目のモーダル（VideoTagModal）は
-                  <form> のネストを避けるため、
-                  ここから削除されました。
-                */}
               </div>
 
-              {/* --- 投稿ボタンエリア --- */}
+              {/* 投稿ボタンエリア */}
               <div className="flex items-center gap-4">
                 <span className="text-sm text-gray-500">
                   {content.length} / 600
@@ -194,9 +208,8 @@ export default function NewPostForm({ userProfile }: NewPostFormProps) {
           </div>
         </div>
       </form>
-      {/* ▲▲▲ 外側のフォームはここまで ▲▲▲ */}
 
-      {/* ▼▼▼【重要】モーダルを<form>タグの「外」に移動しました ▼▼▼ */}
+      {/* 動画タグモーダル（formの外側に配置） */}
       {isVideoModalOpen && pendingVideoData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-4">

@@ -98,7 +98,7 @@ export default async function ProfilePage({ params }: { params: Promise<PagePara
 
   const { data: initialPostsData } = await supabase
     .from('posts')
-    .select('*, profiles!inner(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)))')
+    .select('*, profiles!inner(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)), videos_test(*, artists_test(*)))')
     .eq('user_id', profile.id)
     .order('created_at', { ascending: false })
     .range(0, POSTS_PER_PAGE - 1)
