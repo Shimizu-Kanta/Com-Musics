@@ -5,7 +5,9 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { type Tag } from '@/components/post/TagSearch'
 import { type SongInsert, type ArtistInsert } from '@/types'
-import { type SupabaseClient } from '@supabase/supabase-js'
+import { type Database } from '@/types/database'
+
+type FavoriteVideoInsert = Database['public']['Tables']['favorite_videos_test']['Insert']
 
 // ▼▼▼【重要】このuploadImageヘルパー関数は不要になったため、削除します ▼▼▼
 // async function uploadImage(...) { ... }
@@ -64,15 +66,29 @@ export async function updateProfile(formData: FormData) {
     await supabase.from('favorite_artists').delete().eq('user_id', user.id)
     if (favoriteArtists.length > 0) {
       const artistsToUpsert: ArtistInsert[] = favoriteArtists.map(a => ({ id: a.id, name: a.name, image_url: a.imageUrl }));
-      
-      const favArtistsToInsert = favoriteArtists.map((artist, index) => ({ 
-        user_id: user.id, 
-        artist_id: artist.id, 
+
+      const favArtistsToInsert = favoriteArtists.map((artist, index) => ({
+        user_id: user.id,
+        artist_id: artist.id,
         sort_order: index
       }));
 
       if (artistsToUpsert.length > 0) await supabase.from('artists').upsert(artistsToUpsert)
       if (favArtistsToInsert.length > 0) await supabase.from('favorite_artists').insert(favArtistsToInsert)
+    }
+
+    const favoriteVideos: Tag[] = JSON.parse((formData.get('favoriteVideos') as string) ?? '[]')
+    await supabase.from('favorite_videos_test').delete().eq('user_id', user.id)
+    const videoTags = favoriteVideos.filter(tag => tag.type === 'video')
+    if (videoTags.length > 0) {
+      const favVideosToInsert: FavoriteVideoInsert[] = videoTags.map((video, index) => ({
+        user_id: user.id,
+        video_id: video.id,
+        soat_order: index,
+      }))
+      if (favVideosToInsert.length > 0) {
+        await supabase.from('favorite_videos_test').insert(favVideosToInsert)
+      }
     }
 
   } catch (error) {

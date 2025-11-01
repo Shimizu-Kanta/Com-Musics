@@ -9,6 +9,9 @@ type SongFromDB = Database['public']['Tables']['songs']['Row'] & {
   artists: { id: string; name: string | null } | null
 }
 type ArtistFromDB = Database['public']['Tables']['artists']['Row']
+type VideoFromDB = Database['public']['Tables']['videos_test']['Row'] & {
+  artists_test: { name: string | null } | { name: string | null }[] | null
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -73,11 +76,47 @@ export default async function EditProfilePage({
         imageUrl: artist.image_url ?? undefined,
       })) || []
 
+  const { data: favVideosData } = await supabase
+    .from('favorite_videos_test')
+    .select('videos_test(id, title, thumbnail_url, youtube_video_id, artist_id, artists_test(name))')
+    .eq('user_id', profile.id)
+    .order('soat_order')
+
+  const initialFavoriteVideos: Tag[] = ((favVideosData ?? []) as {
+    videos_test: VideoFromDB | VideoFromDB[] | null
+  }[]).reduce<Tag[]>((acc, { videos_test }) => {
+    const videos = Array.isArray(videos_test)
+      ? videos_test
+      : videos_test
+        ? [videos_test]
+        : []
+
+    for (const video of videos) {
+      const artistRelation = Array.isArray(video.artists_test)
+        ? video.artists_test[0] ?? null
+        : video.artists_test
+
+      acc.push({
+        type: 'video',
+        id: video.id,
+        name: video.title ?? '',
+        imageUrl: video.thumbnail_url ?? undefined,
+        youtube_video_id: video.youtube_video_id ?? undefined,
+        artistId: video.artist_id ?? undefined,
+        artistName: artistRelation?.name ?? undefined,
+      })
+    }
+
+    return acc
+  }, [])
+
+
   return (
     <EditProfileForm
       profile={profile as Profile}
       initialFavoriteSongs={initialFavoriteSongs}
       initialFavoriteArtists={initialFavoriteArtists}
+      initialFavoriteVideos={initialFavoriteVideos}
     />
   )
 }
