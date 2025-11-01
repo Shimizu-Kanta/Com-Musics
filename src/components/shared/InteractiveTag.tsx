@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
-import { XMarkIcon } from '@heroicons/react/24/solid'
+import { PlayCircleIcon, XMarkIcon } from '@heroicons/react/24/solid'
 import { type Tag } from '@/components/post/TagSearch'
 
 // PostCardから流用した、サブスクサイトへのリンクを表示するモーダル
@@ -76,6 +76,38 @@ export default function InteractiveTag({ tag }: { tag: Tag }) {
         {isModalOpen && <MusicLinkModal tag={tag} onClose={() => setIsModalOpen(false)} />}
       </>
     );
+  }
+
+  if (tag.type === 'video') {
+    const youtubeUrl = tag.youtube_video_id
+      ? `https://www.youtube.com/watch?v=${tag.youtube_video_id}`
+      : undefined
+
+    const content = (
+      <div className={`flex items-center rounded-lg p-2 pr-3 transition-colors ${youtubeUrl ? 'bg-red-100 hover:bg-red-200 cursor-pointer' : 'bg-gray-100 cursor-not-allowed opacity-80'}`}>
+        {tag.imageUrl ? (
+          <Image src={tag.imageUrl} alt={tag.name} width={40} height={40} className="rounded-md mr-2 object-cover" />
+        ) : (
+          <PlayCircleIcon className="w-8 h-8 text-red-500 mr-2" />
+        )}
+        <div className="text-left">
+          <p className="text-sm font-bold leading-snug line-clamp-2">{tag.name}</p>
+          {tag.artistName && (
+            <p className="text-xs text-gray-600">{tag.artistName}</p>
+          )}
+        </div>
+      </div>
+    )
+
+    if (!youtubeUrl) {
+      return content
+    }
+
+    return (
+      <a href={youtubeUrl} target="_blank" rel="noopener noreferrer">
+        {content}
+      </a>
+    )
   }
 
   return null;
