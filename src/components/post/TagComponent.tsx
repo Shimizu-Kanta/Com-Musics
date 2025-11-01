@@ -75,28 +75,44 @@ export default function TagComponent({ tag, onTagClick }: TagComponentProps) {
     )
   }
 
-  // ▼▼▼ 動画タグ（新規） ▼▼▼
+  // ▼▼▼ 動画タグ（YouTubeリンク対応版） ▼▼▼
   if ('videos_test' in tag && tag.videos_test) {
-    // 型を明示（anyは使わない）
-    const v = tag.videos_test as {
+    const video = tag.videos_test as {
       id: string
       title?: string | null
-      name?: string | null
       thumbnail_url?: string | null
-      url?: string | null
-      platform?: string | null
+      youtube_video_id?: string | null
+      artists_test?: { name: string | null } | null
     }
 
-    const label = v.title ?? v.name ?? '動画'
-    const href = v.url ?? undefined
+    const videoTitle = video.title ?? '動画'
+    const artistName = video.artists_test?.name ?? null
+    
+    // YouTube URLを生成
+    const youtubeUrl = video.youtube_video_id 
+      ? `https://www.youtube.com/watch?v=${video.youtube_video_id}`
+      : null
 
-    // 外部URLがある場合はアンカーで新規タブ、ない場合はボタン（何もしない）
-    const Inner = (
-      <>
-        {v.thumbnail_url ? (
+    return (
+      <a
+        href={youtubeUrl ?? '#'}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`bg-red-100 text-red-800 text-sm font-medium px-2.5 py-1 rounded-full flex items-center pr-3 ${
+          youtubeUrl ? 'hover:bg-red-200 cursor-pointer' : 'opacity-60 cursor-not-allowed'
+        }`}
+        onClick={(e) => {
+          if (!youtubeUrl) {
+            e.preventDefault()
+            alert('動画のリンクが見つかりません')
+          }
+        }}
+        title={videoTitle}
+      >
+        {video.thumbnail_url ? (
           <Image
-            src={v.thumbnail_url}
-            alt={label}
+            src={video.thumbnail_url}
+            alt={videoTitle}
             width={24}
             height={24}
             className="rounded w-5 h-5 mr-1.5 object-cover"
@@ -104,27 +120,11 @@ export default function TagComponent({ tag, onTagClick }: TagComponentProps) {
         ) : (
           <PlayCircleIcon className="w-4 h-4 mr-1.5" />
         )}
-        <span className="max-w-[14rem] truncate">{label}</span>
-      </>
-    )
-
-    return href ? (
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="bg-red-100 text-red-800 text-sm font-medium px-2.5 py-1 rounded-full flex items-center hover:bg-red-200 pr-3"
-        title={label}
-      >
-        {Inner}
+        <span className="max-w-[14rem] truncate">
+          {videoTitle}
+          {artistName && <span className="text-xs ml-1">- {artistName}</span>}
+        </span>
       </a>
-    ) : (
-      <div
-        className="bg-red-100 text-red-800 text-sm font-medium px-2.5 py-1 rounded-full flex items-center pr-3 opacity-80"
-        title={label}
-      >
-        {Inner}
-      </div>
     )
   }
 
