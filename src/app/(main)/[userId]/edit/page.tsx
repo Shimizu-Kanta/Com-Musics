@@ -7,7 +7,7 @@ import { type Database } from '@/types/database'
 
 type ArtistFromDB = Database['public']['Tables']['artists']['Row']
 
-// favorite_songs の join 結果に合わせて配列前提の型を定義
+// favorite_songs の join 結果に合わせて配列前提の型を定義する
 type ArtistLite = { id: string; name: string | null }
 type SongFromDB = {
   id: string
