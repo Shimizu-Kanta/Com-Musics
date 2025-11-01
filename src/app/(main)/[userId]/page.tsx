@@ -29,6 +29,10 @@ type Live = {
 type AttendedLivesJoinRow = { lives: Live | null } | { lives: Live[] | null }
 type FavoriteSongRow = { songs: Song | null }
 type FavoriteArtistRow = { artists: Artist | null }
+type Video = Database['public']['Tables']['videos_test']['Row'] & {
+  artists_test: { name: string | null } | null
+}
+type FavoriteVideoRow = { videos_test: Video | null }
 
 export const dynamic = 'force-dynamic'
 
@@ -96,6 +100,25 @@ export default async function ProfilePage({ params }: { params: Promise<PagePara
   const { data: favArtistsData } = await supabase.from('favorite_artists').select('artists(*)').eq('user_id', profile.id).order('sort_order')
   const favoriteArtistTags: Tag[] = (favArtistsData as FavoriteArtistRow[] | null)?.map(row => { const artist = row.artists; return { id: artist?.id || '', name: artist?.name || '', type: 'artist' as const, imageUrl: artist?.image_url ?? undefined, } }).filter(tag => tag.id) ?? []
 
+  const { data: favVideosData } = await supabase
+    .from('favorite_videos_test')
+    .select('videos_test(id, title, thumbnail_url, youtube_video_id, artist_id, artists_test(name))')
+    .eq('user_id', profile.id)
+    .order('soat_order')
+
+  const favoriteVideoTags: Tag[] = (favVideosData as FavoriteVideoRow[] | null)?.map(row => {
+    const video = row.videos_test
+    return {
+      id: video?.id || '',
+      name: video?.title || '',
+      type: 'video' as const,
+      imageUrl: video?.thumbnail_url ?? undefined,
+      youtube_video_id: video?.youtube_video_id ?? undefined,
+      artistId: video?.artist_id ?? undefined,
+      artistName: video?.artists_test?.name ?? undefined,
+    }
+  }).filter(tag => tag.id) ?? []
+
   const { data: initialPostsData } = await supabase
     .from('posts')
     .select('*, profiles!inner(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)), videos_test(*, artists_test(*)))')
@@ -135,7 +158,38 @@ export default async function ProfilePage({ params }: { params: Promise<PagePara
         </div>
 
         <div className="mt-4 whitespace-pre-wrap text-sm">{profile.bio}</div>
-        <div className="mt-8 space-y-8">{favoriteArtistTags.length > 0 && (<div><h3 className="mb-2 text-sm font-bold text-gray-600">Favorite Artists</h3><div className="flex flex-wrap gap-2">{favoriteArtistTags.map((tag) => (<InteractiveTag key={tag.id} tag={tag} />))}</div></div>)}{favoriteSongTags.length > 0 && (<div><h3 className="mb-2 text-sm font-bold text-gray-600">Favorite Songs</h3><div className="flex flex-wrap gap-2">{favoriteSongTags.map((tag) => (<InteractiveTag key={tag.id} tag={tag} />))}</div></div>)}</div>
+        <div className="mt-8 space-y-8">
+          {favoriteArtistTags.length > 0 && (
+            <div>
+              <h3 className="mb-2 text-sm font-bold text-gray-600">Favorite Artists</h3>
+              <div className="flex flex-wrap gap-2">
+                {favoriteArtistTags.map((tag) => (
+                  <InteractiveTag key={tag.id} tag={tag} />
+                ))}
+              </div>
+            </div>
+          )}
+          {favoriteSongTags.length > 0 && (
+            <div>
+              <h3 className="mb-2 text-sm font-bold text-gray-600">Favorite Songs</h3>
+              <div className="flex flex-wrap gap-2">
+                {favoriteSongTags.map((tag) => (
+                  <InteractiveTag key={tag.id} tag={tag} />
+                ))}
+              </div>
+            </div>
+          )}
+          {favoriteVideoTags.length > 0 && (
+            <div>
+              <h3 className="mb-2 text-sm font-bold text-gray-600">Favorite Videos</h3>
+              <div className="flex flex-wrap gap-2">
+                {favoriteVideoTags.map((tag) => (
+                  <InteractiveTag key={tag.id} tag={tag} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
       <div className="mx-auto w-full max-w-lg">
         <AttendedLivesSection attendedLives={attendedLives} />

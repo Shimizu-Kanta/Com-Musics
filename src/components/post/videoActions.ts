@@ -42,7 +42,7 @@ function extractVideoId(url: string): string | null {
       if (videoId) return videoId
     }
     return null
-  } catch (err) {
+  } catch {
     return null
   }
 }
