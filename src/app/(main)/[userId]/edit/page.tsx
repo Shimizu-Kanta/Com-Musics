@@ -10,7 +10,7 @@ type SongFromDB = Database['public']['Tables']['songs']['Row'] & {
 }
 type ArtistFromDB = Database['public']['Tables']['artists']['Row']
 type VideoFromDB = Database['public']['Tables']['videos_test']['Row'] & {
-  artists_test: { name: string | null } | null
+  artists_test: { name: string | null } | { name: string | null }[] | null
 }
 
 export const dynamic = 'force-dynamic'
@@ -83,18 +83,26 @@ export default async function EditProfilePage({
     .order('soat_order')
 
   const initialFavoriteVideos: Tag[] =
-    favVideosData
-      ?.flatMap((fav) => fav.videos_test)
-      .filter((video): video is VideoFromDB => video !== null)
-      .map((video) => ({
-        type: 'video',
-        id: video.id,
-        name: video.title ?? '',
-        imageUrl: video.thumbnail_url ?? undefined,
-        youtube_video_id: video.youtube_video_id ?? undefined,
-        artistId: video.artist_id ?? undefined,
-        artistName: video.artists_test?.name ?? undefined,
-      })) || []
+    ((favVideosData ?? []) as { videos_test: VideoFromDB | null }[])
+      .map(({ videos_test: video }) => {
+        if (!video) return null
+
+        const artistRelation = Array.isArray(video.artists_test)
+          ? video.artists_test[0] ?? null
+          : video.artists_test
+
+        return {
+          type: 'video' as const,
+          id: video.id,
+          name: video.title ?? '',
+          imageUrl: video.thumbnail_url ?? undefined,
+          youtube_video_id: video.youtube_video_id ?? undefined,
+          artistId: video.artist_id ?? undefined,
+          artistName: artistRelation?.name ?? undefined,
+        }
+      })
+      .filter((tag): tag is Tag => tag !== null)
+
 
   return (
     <EditProfileForm

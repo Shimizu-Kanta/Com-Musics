@@ -30,7 +30,7 @@ type AttendedLivesJoinRow = { lives: Live | null } | { lives: Live[] | null }
 type FavoriteSongRow = { songs: Song | null }
 type FavoriteArtistRow = { artists: Artist | null }
 type Video = Database['public']['Tables']['videos_test']['Row'] & {
-  artists_test: { name: string | null } | null
+  artists_test: { name: string | null } | { name: string | null }[] | null
 }
 type FavoriteVideoRow = { videos_test: Video | null }
 
@@ -106,18 +106,27 @@ export default async function ProfilePage({ params }: { params: Promise<PagePara
     .eq('user_id', profile.id)
     .order('soat_order')
 
-  const favoriteVideoTags: Tag[] = (favVideosData as FavoriteVideoRow[] | null)?.map(row => {
-    const video = row.videos_test
-    return {
-      id: video?.id || '',
-      name: video?.title || '',
-      type: 'video' as const,
-      imageUrl: video?.thumbnail_url ?? undefined,
-      youtube_video_id: video?.youtube_video_id ?? undefined,
-      artistId: video?.artist_id ?? undefined,
-      artistName: video?.artists_test?.name ?? undefined,
-    }
-  }).filter(tag => tag.id) ?? []
+  const favoriteVideoTags: Tag[] =
+    ((favVideosData as FavoriteVideoRow[] | null) ?? [])
+      .map((row) => {
+        const video = row.videos_test
+        if (!video) return null
+
+        const artistRelation = Array.isArray(video.artists_test)
+          ? video.artists_test[0] ?? null
+          : video.artists_test
+
+        return {
+          id: video.id,
+          name: video.title || '',
+          type: 'video' as const,
+          imageUrl: video.thumbnail_url ?? undefined,
+          youtube_video_id: video.youtube_video_id ?? undefined,
+          artistId: video.artist_id ?? undefined,
+          artistName: artistRelation?.name ?? undefined,
+        }
+      })
+      .filter((tag): tag is Tag => !!tag)
 
   const { data: initialPostsData } = await supabase
     .from('posts')
