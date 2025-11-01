@@ -82,26 +82,33 @@ export default async function EditProfilePage({
     .eq('user_id', profile.id)
     .order('soat_order')
 
-  const initialFavoriteVideos: Tag[] =
-    ((favVideosData ?? []) as { videos_test: VideoFromDB | null }[])
-      .map(({ videos_test: video }) => {
-        if (!video) return null
+  const initialFavoriteVideos: Tag[] = ((favVideosData ?? []) as {
+    videos_test: VideoFromDB | VideoFromDB[] | null
+  }[]).reduce<Tag[]>((acc, { videos_test }) => {
+    const videos = Array.isArray(videos_test)
+      ? videos_test
+      : videos_test
+        ? [videos_test]
+        : []
 
-        const artistRelation = Array.isArray(video.artists_test)
-          ? video.artists_test[0] ?? null
-          : video.artists_test
+    for (const video of videos) {
+      const artistRelation = Array.isArray(video.artists_test)
+        ? video.artists_test[0] ?? null
+        : video.artists_test
 
-        return {
-          type: 'video' as const,
-          id: video.id,
-          name: video.title ?? '',
-          imageUrl: video.thumbnail_url ?? undefined,
-          youtube_video_id: video.youtube_video_id ?? undefined,
-          artistId: video.artist_id ?? undefined,
-          artistName: artistRelation?.name ?? undefined,
-        }
+      acc.push({
+        type: 'video',
+        id: video.id,
+        name: video.title ?? '',
+        imageUrl: video.thumbnail_url ?? undefined,
+        youtube_video_id: video.youtube_video_id ?? undefined,
+        artistId: video.artist_id ?? undefined,
+        artistName: artistRelation?.name ?? undefined,
       })
-      .filter((tag): tag is Tag => tag !== null)
+    }
+
+    return acc
+  }, [])
 
 
   return (
