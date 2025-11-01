@@ -66,14 +66,13 @@ export default function NewLiveForm({ venues }: { venues: string[] }) {
           </button>
         )}
         
-        {isSearching && <TagSearch onTagSelect={handleArtistSelect} onClose={() => setIsSearching(false)} searchOnly='artist' />}
-        
-        {selectedArtist && (
-          <>
-            <input type="hidden" name="artistId" value={selectedArtist.id} />
-            <input type="hidden" name="artistName" value={selectedArtist.name} />
-            <input type="hidden" name="artistImageUrl" value={selectedArtist.imageUrl || ''} />
-          </>
+        {isSearching && (
+          <TagSearch
+            onTagSelect={handleArtistSelect}
+            onClose={() => setIsSearching(false)}
+            searchOnly='artist'
+            onVideoUrlSubmit={() => {}}
+          />
         )}
       </div>
       

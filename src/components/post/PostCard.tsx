@@ -59,7 +59,6 @@ function MusicLinkModal({ tag, onClose }: { tag: TagWithRelations; onClose: () =
 const formatDateTime = (dateString: string) => {
   const date = new Date(dateString);
   const year = date.getFullYear();
-  // getMonth()は0から始まるため+1し、padStartで2桁に揃える
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   const hours = String(date.getHours()).padStart(2, '0');
@@ -75,7 +74,8 @@ export default function PostCard({ post }: { post: PostWithRelations }) {
   if (!profile) return null
 
   const openModal = (tag: TagWithRelations) => {
-    if (tag.lives) return // ライブタグはモーダル非対象
+    // ▼ ライブと動画はモーダル非対象（動画は外部URLを開く設計）
+    if (tag.lives || ('videos_test' in tag && tag.videos_test)) return
     setModalTag(tag)
     setIsModalOpen(true)
   }
@@ -84,7 +84,7 @@ export default function PostCard({ post }: { post: PostWithRelations }) {
     <div className="w-full max-w-lg p-4 mb-4 bg-white border border-gray-200 rounded-lg shadow">
       <Link href={`/${profile.user_id_text}`} className="block">
         <div className="flex items-center mb-2">
-          {/* ▼ ここだけ変更：縦長防止のため固定サイズの円形枠 + Image fill */}
+          {/* アイコン縦長防止 */}
           <div className="relative mr-3 h-10 w-10 overflow-hidden rounded-full bg-gray-200 flex-shrink-0">
             {profile.avatar_url ? (
               <Image

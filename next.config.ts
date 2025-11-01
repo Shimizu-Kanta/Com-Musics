@@ -15,6 +15,12 @@ const nextConfig = {
         port: '',
         pathname: '/image/**', // /image/ 以下の全てのパスを許可
       },
+      {
+        protocol: 'https',
+        hostname: 'i.ytimg.com', // 許可するドメイン
+        port: '',
+        pathname: '/vi/**', // /vi/ から始まるパスを許可
+      },
     ],
   },
 };

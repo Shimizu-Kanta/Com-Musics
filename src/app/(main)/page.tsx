@@ -49,7 +49,7 @@ export default async function HomePage({
   try {
     let query = supabase
       .from('posts')
-      .select('*, profiles!inner(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)))')
+      .select('*, profiles!inner(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)), videos_test(*, artists_test(*)))')
       .order('created_at', { ascending: false })
       
     // ▼▼▼【重要】ここにも賢い調査方法を実装します ▼▼▼

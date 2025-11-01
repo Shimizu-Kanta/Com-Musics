@@ -14,11 +14,13 @@ export type Attendee = Database['public']['Tables']['attended_lives']['Row']
 export type SongInsert = Database['public']['Tables']['songs']['Insert']
 export type ArtistInsert = Database['public']['Tables']['artists']['Insert']
 export type TagInsert = Database['public']['Tables']['tags']['Insert']
+export type Video = Database['public']['Tables']['videos_test']['Row']
 
 export type TagWithRelations = Tag & {
   songs: (Song & { artists: { id: string; name: string | null } | null }) | null
   artists: Artist | null
   lives: Live | null
+  videos_test?: (Video & { artists_test: Artist | null }) | null
 }
 export type PostWithRelations = Post & {
   profiles: Profile | null

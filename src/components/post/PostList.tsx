@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useInView } from 'react-intersection-observer'
 import { fetchPosts } from '@/app/(main)/post/actions'
 import type { PostWithRelations } from '@/types'
@@ -22,20 +22,19 @@ export default function PostList({ initialPosts, userId, profileUserId }: { init
     setHasMore(initialPosts.length >= 20)
   }, [initialPosts])
 
-  const loadMorePosts = async () => {
+  const tab = searchParams.get('tab') || 'all'
+  const artistId = searchParams.get('artistId') || undefined
+  const searchQuery = searchParams.get('q') || undefined
+
+  const loadMorePosts = useCallback(async () => {
     if (isLoading) return;
     setIsLoading(true)
 
-    // 現在のページのURLから、必要な情報を取得
-    const tab = searchParams.get('tab') || 'all'
-    const artistId = searchParams.get('artistId') || undefined
-    const searchQuery = searchParams.get('q') || undefined
-
-    const newPosts = await fetchPosts({ 
-      page, 
-      userId, 
-      tab, 
-      artistId, 
+    const newPosts = await fetchPosts({
+      page,
+      userId,
+      tab,
+      artistId,
       profileUserId, // プロフィールIDを渡す
       searchQuery  // 検索クエリを渡す
     })
@@ -47,13 +46,13 @@ export default function PostList({ initialPosts, userId, profileUserId }: { init
       setHasMore(false)
     }
     setIsLoading(false)
-  }
+  }, [artistId, isLoading, page, profileUserId, searchQuery, tab, userId])
 
   useEffect(() => {
     if (inView && hasMore && !isLoading) {
       loadMorePosts()
     }
-  }, [inView, hasMore, isLoading])
+  }, [inView, hasMore, isLoading, loadMorePosts])
 
   if (posts.length === 0) {
     return <p className="p-4 text-center text-gray-500">まだ投稿がありません。</p>;
