@@ -1,26 +1,23 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
 import SearchBar from '@/components/shared/SearchBar'
 import LogoutButton from '@/components/auth/LogoutButton'
-import { HomeIcon, TicketIcon, UserCircleIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import { MagnifyingGlassIcon, Bars3Icon } from '@heroicons/react/24/outline'
+import { useSidebar } from '@/components/layout/SidebarContext'
 
 export default function Header() {
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const [user, setUser] = useState<User | null>(null)
-  const [profileUserId, setProfileUserId] = useState<string | null>(null)
+  const { openMobile } = useSidebar()
 
   useEffect(() => {
     const fetchUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
-      if (user) {
-        const { data: profile } = await supabase.from('profiles').select('user_id_text').eq('id', user.id).single()
-        if (profile) setProfileUserId(profile.user_id_text)
-      }
     }
     fetchUser()
 
@@ -28,8 +25,6 @@ export default function Header() {
       setUser(session?.user ?? null)
       if (session?.user) {
         fetchUser()
-      } else {
-        setProfileUserId(null)
       }
     })
 
@@ -51,6 +46,15 @@ export default function Header() {
 
         <nav className="flex items-center space-x-2 md:space-x-4">
           {/* スマホなどの狭い画面でのみ表示される検索アイコン */}
+          <button
+            type="button"
+            onClick={openMobile}
+            className="p-2 rounded-full hover:bg-gray-100 md:hidden"
+            aria-label="メニュー"
+          >
+            <Bars3Icon className="h-6 w-6 text-gray-600" />
+          </button>
+
           <Link href="/search" className="p-2 rounded-full hover:bg-gray-100 md:hidden" aria-label="検索">
             <MagnifyingGlassIcon className="h-6 w-6 text-gray-600" />
           </Link>
@@ -58,17 +62,6 @@ export default function Header() {
           {user ? (
             // --- ログインしている時の表示 ---
             <>
-              <Link href="/" className="p-2 rounded-full hover:bg-gray-100" aria-label="ホーム">
-                <HomeIcon className="h-6 w-6 text-gray-600" />
-              </Link>
-              <Link href="/live" className="p-2 rounded-full hover:bg-gray-100" aria-label="ライブ一覧">
-                <TicketIcon className="h-6 w-6 text-gray-600" />
-              </Link>
-              {profileUserId && (
-                <Link href={`/${profileUserId}`} className="p-2 rounded-full hover:bg-gray-100" aria-label="プロフィール">
-                  <UserCircleIcon className="h-6 w-6 text-gray-600" />
-                </Link>
-              )}
               <LogoutButton />
             </>
           ) : (
