@@ -256,10 +256,10 @@ export default function Sidebar() {
                         alt={artist.name}
                         width={32}
                         height={32}
-                        className="h-8 w-8 rounded-full object-cover"
+                        className="h-8 w-8 flex-shrink-0 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-sm font-semibold text-gray-600">
+                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-200 text-sm font-semibold text-gray-600">
                         {artist.name.charAt(0)}
                       </div>
                     )}
@@ -281,7 +281,7 @@ export default function Sidebar() {
       <aside
         className={cn(
           'hidden md:flex md:flex-col md:border-r md:border-gray-200 md:bg-white md:p-4 md:pt-6',
-          'md:sticky md:top-16 md:h-[calc(100vh-4rem)]',
+          'md:sticky md:top-16 md:h-[calc(100vh-4rem)] md:z-30',
           desktopShouldShowLabels ? 'md:w-64' : 'md:w-20',
         )}
       >
@@ -308,3 +308,4 @@ export default function Sidebar() {
     </>
   )
 }
+

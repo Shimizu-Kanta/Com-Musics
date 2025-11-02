@@ -23,7 +23,7 @@ export default function RootLayout({
           {/* ▼▼▼【重要】ヘッダーの呼び出しを、この一行だけにします ▼▼▼ */}
           <Header />
 
-          <main className="col-span-1 md:col-span-3 flex flex-col items-center w-full min-h-screen bg-gray-50 md:border-l border-gray-200">
+          <main className="flex min-h-[calc(100vh-4rem)] w-full justify-center bg-gray-50">
             {children}
           </main>
         </SidebarProvider>
@@ -31,3 +31,4 @@ export default function RootLayout({
     </html>
   )
 }
+
