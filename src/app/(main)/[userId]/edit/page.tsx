@@ -4,7 +4,7 @@ import EditProfileForm from '@/components/profile/EditProfileForm'
 import { type Tag } from '@/components/post/TagSearch'
 import { type Profile } from '@/types'
 import { type Database } from '@/types/database'
-import { getPrimaryArtistFromRelation } from '@/lib/relations'
+import { getPrimaryArtistFromRelation, getPrimaryArtistFromDirectRelation } from '@/lib/relations'
 
 type ArtistFromDB = Database['public']['Tables']['artists_v2']['Row']
 
@@ -24,7 +24,7 @@ type VideoLite = {
   thumbnail_url: string | null
   youtube_video_id: string | null
   artist_id: string | null
-  artists_v2: { name: string | null } | null
+  artists_v2: ArtistLite | ArtistLite[] | null
 }
 
 type FavArtistJoinRow = { artists_v2: ArtistFromDB | ArtistFromDB[] | null }
@@ -108,7 +108,7 @@ export default async function EditProfilePage({
   const { data: favVideosData } = await supabase
     .from('favorite_videos')
     .select(
-      'videos(id, title, thumbnail_url, youtube_video_id, artist_id, artists_v2(name))'
+      'videos(id, title, thumbnail_url, youtube_video_id, artist_id, artists_v2(id, name))'
     )
     .eq('user_id', profile.id)
     .order('sort_order')
@@ -121,14 +121,14 @@ export default async function EditProfilePage({
       return collection
     })
     .map((video) => {
-        const artistRel = video.artists_v2
+        const artistRel = getPrimaryArtistFromDirectRelation(video.artists_v2)
         const tag: Tag = {
           type: 'video',
           id: video.id,
           name: video.title ?? '',
           imageUrl: video.thumbnail_url ?? undefined,
           youtube_video_id: video.youtube_video_id ?? undefined,
-          artistId: video.artist_id ?? undefined,
+          artistId: artistRel?.id ?? video.artist_id ?? undefined,
           artistName: artistRel?.name ?? undefined,
         }
         return tag

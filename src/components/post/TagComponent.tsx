@@ -1,6 +1,6 @@
 // src/components/post/TagComponent.tsx
 import type { TagWithRelations } from '@/types'
-import { getPrimaryArtistFromRelation } from '@/lib/relations'
+import { getPrimaryArtistFromRelation, getPrimaryArtistFromDirectRelation } from '@/lib/relations'
 import Image from 'next/image'
 import { MusicalNoteIcon, UserCircleIcon, TicketIcon, PlayCircleIcon } from '@heroicons/react/24/solid'
 
@@ -83,7 +83,8 @@ export default function TagComponent({ tag, onTagClick }: TagComponentProps) {
     const video = tag.videos
 
     const videoTitle = video.title ?? '動画'
-    const artistName = video.artists_v2?.name ?? null
+    const primaryArtist = getPrimaryArtistFromDirectRelation(video.artists_v2)
+    const artistName = primaryArtist?.name ?? null
 
     // YouTube URLを生成
     const youtubeUrl = video.youtube_video_id

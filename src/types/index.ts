@@ -28,7 +28,7 @@ export type LiveWithArtists = Live & {
 }
 
 export type VideoWithArtist = Video & {
-  artists_v2: Artist | null
+  artists_v2: Artist | Artist[] | null
 }
 
 export type TagWithRelations = Tag & {

@@ -9,7 +9,7 @@ import { type Tag } from '@/components/post/TagSearch'
 import Image from 'next/image'
 import PostList from '@/components/post/PostList'
 import { type PostWithRelations } from '@/types'
-import { getPrimaryArtistFromRelation } from '@/lib/relations'
+import { getPrimaryArtistFromRelation, getPrimaryArtistFromDirectRelation } from '@/lib/relations'
 import AttendedLivesSection from '@/components/profile/AttendedLivesSection'
 
 const POSTS_PER_PAGE = 20
@@ -29,7 +29,7 @@ type AttendedLivesJoinRow = { lives_v2: Live | Live[] | null }
 type FavoriteSongRow = { songs_v2: Song | null }
 type FavoriteArtistRow = { artists_v2: Artist | null }
 type Video = Database['public']['Tables']['videos']['Row'] & {
-  artists_v2: { name: string | null } | null
+  artists_v2: ArtistLite | ArtistLite[] | null
 }
 type FavoriteVideoRow = { videos: Video | Video[] | null }
 
@@ -118,7 +118,7 @@ export default async function ProfilePage({ params }: { params: Promise<PagePara
 
   const { data: favVideosData } = await supabase
     .from('favorite_videos')
-    .select('videos(id, title, thumbnail_url, youtube_video_id, artist_id, artists_v2(name))')
+    .select('videos(id, title, thumbnail_url, youtube_video_id, artist_id, artists_v2(id, name))')
     .eq('user_id', profile.id)
     .order('sort_order')
 
@@ -131,7 +131,7 @@ export default async function ProfilePage({ params }: { params: Promise<PagePara
           : []
 
       for (const video of videos) {
-        const artistRelation = video.artists_v2
+        const artistRelation = getPrimaryArtistFromDirectRelation(video.artists_v2)
 
         acc.push({
           id: video.id,
@@ -139,7 +139,7 @@ export default async function ProfilePage({ params }: { params: Promise<PagePara
           type: 'video',
           imageUrl: video.thumbnail_url ?? undefined,
           youtube_video_id: video.youtube_video_id ?? undefined,
-          artistId: video.artist_id ?? undefined,
+          artistId: artistRelation?.id ?? video.artist_id ?? undefined,
           artistName: artistRelation?.name ?? undefined,
         })
       }

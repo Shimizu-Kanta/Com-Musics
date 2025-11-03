@@ -18,3 +18,17 @@ export function getPrimaryArtistFromRelation<T extends ArtistLike>(
 
   return value
 }
+
+export function getPrimaryArtistFromDirectRelation<T extends ArtistLike>(
+  value: T | T[] | null | undefined,
+): T | null {
+  if (!value) {
+    return null
+  }
+
+  if (Array.isArray(value)) {
+    return (value[0] as T | undefined) ?? null
+  }
+
+  return value
+}

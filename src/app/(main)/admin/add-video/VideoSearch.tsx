@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { searchVideos, type VideoSearchResult } from './actions'
+import { getPrimaryArtistFromDirectRelation } from '@/lib/relations'
 import { useDebounce } from 'use-debounce'
 
 interface VideoSearchProps {
@@ -45,7 +46,7 @@ export default function VideoSearch({ onVideoSelect, value }: VideoSearchProps) 
   }, [debouncedQuery, selectedTitle, query]) // queryが変更されたら検索
 
   const handleSelect = (video: VideoSearchResult) => {
-    const artistName = video.artists_v2?.name || '不明'
+    const artistName = getPrimaryArtistFromDirectRelation(video.artists_v2)?.name || '不明'
     const displayTitle = `${video.title} (${artistName})`
     
     setQuery(displayTitle) // 自分のテキストを更新
@@ -78,15 +79,28 @@ export default function VideoSearch({ onVideoSelect, value }: VideoSearchProps) 
       {isLoading && <p className="text-sm text-gray-500">検索中...</p>}
       {results.length > 0 && (
         <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
-          {results.map((video) => (
-            <li key={video.id} onClick={() => handleSelect(video)} className="flex items-center p-2 hover:bg-gray-100 cursor-pointer" >
-              <Image src={video.thumbnail_url || '/default-avatar.png'} alt={video.title} width={32} height={32} className="rounded-md mr-2" />
-              <div>
-                <p className="font-semibold">{video.title}</p>
-                <p className="text-xs text-gray-500">{video.artists_v2?.name || '不明'}</p>
-              </div>
-            </li>
-          ))}
+          {results.map((video) => {
+            const primaryArtist = getPrimaryArtistFromDirectRelation(video.artists_v2)
+            return (
+              <li
+                key={video.id}
+                onClick={() => handleSelect(video)}
+                className="flex items-center p-2 hover:bg-gray-100 cursor-pointer"
+              >
+                <Image
+                  src={video.thumbnail_url || '/default-avatar.png'}
+                  alt={video.title}
+                  width={32}
+                  height={32}
+                  className="rounded-md mr-2"
+                />
+                <div>
+                  <p className="font-semibold">{video.title}</p>
+                  <p className="text-xs text-gray-500">{primaryArtist?.name || '不明'}</p>
+                </div>
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>

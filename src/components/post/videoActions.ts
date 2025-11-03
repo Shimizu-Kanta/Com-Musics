@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { getPrimaryArtistFromDirectRelation } from '@/lib/relations'
 import { z } from 'zod'
 // TagSearch.tsx から Tag 型をインポート
 import type { Tag } from './TagSearch'
@@ -117,9 +118,10 @@ const videoSchema = z.object({
   artist_id: z.string().uuid().nullable(),
   original_song_id: z.string().uuid().nullable(),
 })
+type VideoArtistLite = { id?: string | null; name: string | null }
 type VideoWithArtist = {
   id: string
-  artists_v2: { name: string } | null
+  artists_v2: VideoArtistLite | VideoArtistLite[] | null
 }
 
 export async function saveVideoAndCreateTag(
@@ -144,7 +146,7 @@ export async function saveVideoAndCreateTag(
   const supabase = createClient()
   const { data: initialVideo, error } = await supabase
     .from('videos')
-    .select('id, artists_v2(name)')
+    .select('id, artists_v2(id, name)')
     .eq('youtube_video_id', validatedFields.data.youtube_video_id)
     .single<VideoWithArtist>()
   if (error && error.code !== 'PGRST116') {
@@ -163,7 +165,7 @@ export async function saveVideoAndCreateTag(
         artist_id: validatedFields.data.artist_id,
         original_song_id: validatedFields.data.original_song_id,
       })
-      .select('id, artists_v2(name)')
+      .select('id, artists_v2(id, name)')
       .single<VideoWithArtist>()
     if (insertError) {
       return { error: `DB保存エラー: ${insertError.message}` }
@@ -173,14 +175,16 @@ export async function saveVideoAndCreateTag(
   if (!video) {
     return { error: '動画の登録または取得に失敗しました。' }
   }
+  const primaryArtist = getPrimaryArtistFromDirectRelation(video.artists_v2)
+
   return {
     tag: {
       type: 'video',
       id: video.id,
       name: validatedFields.data.title,
       imageUrl: validatedFields.data.thumbnail_url,
-      artistName: video.artists_v2?.name || '不明',
-      artistId: validatedFields.data.artist_id,
+      artistName: primaryArtist?.name || '不明',
+      artistId: validatedFields.data.artist_id ?? primaryArtist?.id ?? undefined,
       youtube_video_id: validatedFields.data.youtube_video_id,
     },
   }

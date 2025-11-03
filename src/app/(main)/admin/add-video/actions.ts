@@ -249,11 +249,13 @@ export async function searchSongs(
 }
 
 // videosテーブルから検索するための型
+type VideoArtistLite = { id: string | null; name: string | null }
+
 export interface VideoSearchResult {
   id: string
   title: string
   thumbnail_url: string | null
-  artists_v2: { name: string | null } | null
+  artists_v2: VideoArtistLite | VideoArtistLite[] | null
 }
 
 export async function searchVideos(
@@ -274,6 +276,7 @@ export async function searchVideos(
         title,
         thumbnail_url,
         artists_v2 (
+          id,
           name
         )
       `)
