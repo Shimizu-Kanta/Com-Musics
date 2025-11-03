@@ -239,9 +239,10 @@ export async function searchSongs(
     if (error) throw error
 
     const songs: SongSearchResult[] = (data ?? []).map((song) => ({
-      ...song,
+      id: song.id,
+      title: song.title,
+      image_url: song.image_url,
       song_artists: (song.song_artists ?? []).map((relation) => ({
-        ...relation,
         artists_v2: getFirstFromMaybeArray(relation.artists_v2),
       })),
     }))
