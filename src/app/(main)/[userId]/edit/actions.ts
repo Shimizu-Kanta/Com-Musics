@@ -7,7 +7,7 @@ import { type Tag } from '@/components/post/TagSearch'
 import { type SongInsert, type ArtistInsert } from '@/types'
 import { type Database } from '@/types/database'
 
-type FavoriteVideoInsert = Database['public']['Tables']['favorite_videos_test']['Insert']
+type FavoriteVideoInsert = Database['public']['Tables']['favorite_videos']['Insert']
 
 // ▼▼▼【重要】このuploadImageヘルパー関数は不要になったため、削除します ▼▼▼
 // async function uploadImage(...) { ... }
@@ -38,32 +38,41 @@ export async function updateProfile(formData: FormData) {
 
     // (お気に入り楽曲・アーティストの更新処理は一切変更ありません)
     const favoriteSongs: Tag[] = JSON.parse(formData.get('favoriteSongs') as string)
-    await supabase.from('favorite_songs').delete().eq('user_id', user.id)
+    await supabase.from('favorite_songs_v2').delete().eq('user_id', user.id)
     if (favoriteSongs.length > 0) {
-      const songsToUpsert: SongInsert[] = favoriteSongs.map(s => ({ 
-        id: s.id, 
-        name: s.name, 
-        artist_id: s.artistId!, 
-        album_art_url: s.imageUrl 
-      }))
-      const artistsForSongsToUpsert: ArtistInsert[] = favoriteSongs.map(s => ({
-        id: s.artistId!,
-        name: s.artistName!
-      }))
-      
-      const favSongsToInsert = favoriteSongs.map((song, index) => ({ 
-        user_id: user.id, 
-        song_id: song.id, 
-        sort_order: index
+      const artistsForSongsToUpsert: ArtistInsert[] = favoriteSongs
+        .filter((s) => s.artistId && s.artistName)
+        .map(s => ({
+          id: s.artistId!,
+          name: s.artistName!,
+          image_url: s.imageUrl,
+        }))
+
+      const songsToUpsert: SongInsert[] = favoriteSongs.map(s => ({
+        id: s.id,
+        title: s.name,
+        image_url: s.imageUrl,
+        spotify_id: s.id,
       }))
 
-      if (artistsForSongsToUpsert.length > 0) await supabase.from('artists').upsert(artistsForSongsToUpsert)
-      if (songsToUpsert.length > 0) await supabase.from('songs').upsert(songsToUpsert)
-      if (favSongsToInsert.length > 0) await supabase.from('favorite_songs').insert(favSongsToInsert)
+      const songArtistLinks = favoriteSongs
+        .filter((s) => s.artistId)
+        .map((s) => ({ song_id: s.id, artist_id: s.artistId! }))
+
+      const favSongsToInsert = favoriteSongs.map((song, index) => ({
+        user_id: user.id,
+        song_id: song.id,
+        sort_order: index,
+      }))
+
+      if (artistsForSongsToUpsert.length > 0) await supabase.from('artists_v2').upsert(artistsForSongsToUpsert)
+      if (songsToUpsert.length > 0) await supabase.from('songs_v2').upsert(songsToUpsert)
+      if (songArtistLinks.length > 0) await supabase.from('song_artists').upsert(songArtistLinks, { onConflict: 'song_id,artist_id' })
+      if (favSongsToInsert.length > 0) await supabase.from('favorite_songs_v2').insert(favSongsToInsert)
     }
 
     const favoriteArtists: Tag[] = JSON.parse(formData.get('favoriteArtists') as string)
-    await supabase.from('favorite_artists').delete().eq('user_id', user.id)
+    await supabase.from('favorite_artists_v2').delete().eq('user_id', user.id)
     if (favoriteArtists.length > 0) {
       const artistsToUpsert: ArtistInsert[] = favoriteArtists.map(a => ({ id: a.id, name: a.name, image_url: a.imageUrl }));
 
@@ -73,21 +82,21 @@ export async function updateProfile(formData: FormData) {
         sort_order: index
       }));
 
-      if (artistsToUpsert.length > 0) await supabase.from('artists').upsert(artistsToUpsert)
-      if (favArtistsToInsert.length > 0) await supabase.from('favorite_artists').insert(favArtistsToInsert)
+      if (artistsToUpsert.length > 0) await supabase.from('artists_v2').upsert(artistsToUpsert)
+      if (favArtistsToInsert.length > 0) await supabase.from('favorite_artists_v2').insert(favArtistsToInsert)
     }
 
     const favoriteVideos: Tag[] = JSON.parse((formData.get('favoriteVideos') as string) ?? '[]')
-    await supabase.from('favorite_videos_test').delete().eq('user_id', user.id)
+    await supabase.from('favorite_videos').delete().eq('user_id', user.id)
     const videoTags = favoriteVideos.filter(tag => tag.type === 'video')
     if (videoTags.length > 0) {
       const favVideosToInsert: FavoriteVideoInsert[] = videoTags.map((video, index) => ({
         user_id: user.id,
         video_id: video.id,
-        soat_order: index,
+        sort_order: index,
       }))
       if (favVideosToInsert.length > 0) {
-        await supabase.from('favorite_videos_test').insert(favVideosToInsert)
+        await supabase.from('favorite_videos').insert(favVideosToInsert)
       }
     }
 

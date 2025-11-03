@@ -9,30 +9,29 @@ import { type Tag } from '@/components/post/TagSearch'
 import Image from 'next/image'
 import PostList from '@/components/post/PostList'
 import { type PostWithRelations } from '@/types'
+import { getPrimaryArtistFromRelation } from '@/lib/relations'
 import AttendedLivesSection from '@/components/profile/AttendedLivesSection'
 
 const POSTS_PER_PAGE = 20
 
 type PageParams = { userId: string }
 
-// ▼▼▼【重要】Songの型定義にalbum_art_urlを追加します ▼▼▼
-type Song = Database['public']['Tables']['songs']['Row'] & {
-  artists: { name: string; id: string } | null
+type ArtistLite = { id: string; name: string | null }
+type SongArtistRelation = { artists_v2: ArtistLite | ArtistLite[] | null }
+type Song = Database['public']['Tables']['songs_v2']['Row'] & {
+  song_artists: SongArtistRelation[] | null
 }
-type Artist = Database['public']['Tables']['artists']['Row']
-type Live = {
-  id: number
-  name: string
-  live_date: string | null
-  artists: { name: string | null } | null
+type Artist = Database['public']['Tables']['artists_v2']['Row']
+type Live = Database['public']['Tables']['lives_v2']['Row'] & {
+  live_artists: { artists_v2: { name: string | null } | null }[] | null
 }
-type AttendedLivesJoinRow = { lives: Live | null } | { lives: Live[] | null }
-type FavoriteSongRow = { songs: Song | null }
-type FavoriteArtistRow = { artists: Artist | null }
-type Video = Database['public']['Tables']['videos_test']['Row'] & {
-  artists_test: { name: string | null } | { name: string | null }[] | null
+type AttendedLivesJoinRow = { lives_v2: Live | Live[] | null }
+type FavoriteSongRow = { songs_v2: Song | null }
+type FavoriteArtistRow = { artists_v2: Artist | null }
+type Video = Database['public']['Tables']['videos']['Row'] & {
+  artists_v2: { name: string | null } | null
 }
-type FavoriteVideoRow = { videos_test: Video | Video[] | null }
+type FavoriteVideoRow = { videos: Video | Video[] | null }
 
 export const dynamic = 'force-dynamic'
 
@@ -75,49 +74,64 @@ export default async function ProfilePage({ params }: { params: Promise<PagePara
     isFollowing = !!followingRecord
   }
   
-  const { data: attendedLivesData } = await supabase.from('attended_lives').select('lives(*, artists(name))').eq('user_id', profile.id)
-  const attendedLives = (attendedLivesData as AttendedLivesJoinRow[] | null)?.map(row => row.lives).flat().filter((live): live is Live => !!live) ?? []
+  const { data: attendedLivesData } = await supabase
+    .from('attended_lives_v2')
+    .select('lives_v2(*, live_artists(*, artists_v2(name)))')
+    .eq('user_id', profile.id)
+
+  const attendedLives = ((attendedLivesData as AttendedLivesJoinRow[] | null) ?? [])
+    .flatMap((row) => {
+      const lives = row.lives_v2
+      if (!lives) return []
+      return Array.isArray(lives) ? lives : [lives]
+    })
+
+  const attendedLivesForSection = attendedLives.map((live) => ({
+    id: live.id,
+    name: live.name,
+    live_date: live.live_date,
+    artists: getPrimaryArtistFromRelation(live.live_artists),
+  }))
 
   const { data: favSongsData } = await supabase
-    .from('favorite_songs')
-    .select('songs(*, artists(id, name))') // `*`でalbum_art_urlも取得
+    .from('favorite_songs_v2')
+    .select('songs_v2(*, song_artists(*, artists_v2(id, name)))')
     .eq('user_id', profile.id)
     .order('sort_order')
 
   // 2. お気に入り楽曲タグにimageUrlを追加
   const favoriteSongTags: Tag[] = (favSongsData as FavoriteSongRow[] | null)?.map(row => {
-    const song = row.songs
+    const song = row.songs_v2
+    const primaryArtist = song ? getPrimaryArtistFromRelation(song.song_artists) : null
     return {
       id: song?.id || '',
-      name: song?.name || '',
+      name: song?.title || '',
       type: 'song' as const,
-      artistId: song?.artists?.id,
-      artistName: song?.artists?.name,
-      imageUrl: song?.album_art_url ?? undefined, // imageUrlを追加
+      artistId: primaryArtist?.id,
+      artistName: primaryArtist?.name ?? undefined,
+      imageUrl: song?.image_url ?? undefined,
     }
   }).filter(tag => tag.id) ?? []
 
-  const { data: favArtistsData } = await supabase.from('favorite_artists').select('artists(*)').eq('user_id', profile.id).order('sort_order')
-  const favoriteArtistTags: Tag[] = (favArtistsData as FavoriteArtistRow[] | null)?.map(row => { const artist = row.artists; return { id: artist?.id || '', name: artist?.name || '', type: 'artist' as const, imageUrl: artist?.image_url ?? undefined, } }).filter(tag => tag.id) ?? []
+  const { data: favArtistsData } = await supabase.from('favorite_artists_v2').select('artists_v2(*)').eq('user_id', profile.id).order('sort_order')
+  const favoriteArtistTags: Tag[] = (favArtistsData as FavoriteArtistRow[] | null)?.map(row => { const artist = row.artists_v2; return { id: artist?.id || '', name: artist?.name || '', type: 'artist' as const, imageUrl: artist?.image_url ?? undefined, } }).filter(tag => tag.id) ?? []
 
   const { data: favVideosData } = await supabase
-    .from('favorite_videos_test')
-    .select('videos_test(id, title, thumbnail_url, youtube_video_id, artist_id, artists_test(name))')
+    .from('favorite_videos')
+    .select('videos(id, title, thumbnail_url, youtube_video_id, artist_id, artists_v2(name))')
     .eq('user_id', profile.id)
-    .order('soat_order')
+    .order('sort_order')
 
   const favoriteVideoTags: Tag[] = ((favVideosData as FavoriteVideoRow[] | null) ?? [])
     .reduce<Tag[]>((acc, row) => {
-      const videos = Array.isArray(row.videos_test)
-        ? row.videos_test
-        : row.videos_test
-          ? [row.videos_test]
+      const videos = Array.isArray(row.videos)
+        ? row.videos
+        : row.videos
+          ? [row.videos]
           : []
 
       for (const video of videos) {
-        const artistRelation = Array.isArray(video.artists_test)
-          ? video.artists_test[0] ?? null
-          : video.artists_test
+        const artistRelation = video.artists_v2
 
         acc.push({
           id: video.id,
@@ -135,7 +149,18 @@ export default async function ProfilePage({ params }: { params: Promise<PagePara
 
   const { data: initialPostsData } = await supabase
     .from('posts')
-    .select('*, profiles!inner(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)), videos_test(*, artists_test(*)))')
+    .select(`
+      *,
+      profiles!inner(*),
+      likes(user_id),
+      tags:tags_v2(
+        *,
+        songs_v2(*, song_artists(*, artists_v2(*))),
+        artists_v2(*),
+        lives_v2(*, live_artists(*, artists_v2(*))),
+        videos(*, artists_v2(*))
+      )
+    `)
     .eq('user_id', profile.id)
     .order('created_at', { ascending: false })
     .range(0, POSTS_PER_PAGE - 1)
@@ -167,7 +192,7 @@ export default async function ProfilePage({ params }: { params: Promise<PagePara
             <span className="font-bold text-black">{followersCount ?? 0}</span> フォロワー
           </Link>
           <p>
-            <span className="font-bold text-black">{attendedLives.length}</span> 参戦したライブ
+            <span className="font-bold text-black">{attendedLivesForSection.length}</span> 参戦したライブ
           </p>
         </div>
 
@@ -206,7 +231,7 @@ export default async function ProfilePage({ params }: { params: Promise<PagePara
         </div>
       </div>
       <div className="mx-auto w-full max-w-lg">
-        <AttendedLivesSection attendedLives={attendedLives} />
+          <AttendedLivesSection attendedLives={attendedLivesForSection} />
         <div className="w-full border-t border-gray-200 pt-4">
           <h2 className="mb-4 px-4 text-xl font-bold">投稿</h2>
           <PostList 

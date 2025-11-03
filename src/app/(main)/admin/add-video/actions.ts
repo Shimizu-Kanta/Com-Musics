@@ -2,6 +2,7 @@
 
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server' // server用supabaseをインポート
+import { getFirstFromMaybeArray } from '@/lib/relations'
 
 // APIのレスポンスの「型」を定義
 export interface YouTubeVideo {
@@ -100,7 +101,6 @@ const videoSchema = z.object({
   video_type: z.enum(['original_song', 'cover', 'live_performance']),
   artist_id: z.string().uuid().optional().or(z.literal('')),
   original_song_id: z.string().uuid().optional().or(z.literal('')),
-  original_video_id: z.string().uuid().optional().or(z.literal('')),
 })
 
 export async function saveVideo(
@@ -113,7 +113,6 @@ export async function saveVideo(
     video_type: formData.get('video_type'),
     artist_id: formData.get('artist_id'),
     original_song_id: formData.get('original_song_id'),
-    original_video_id: formData.get('original_video_id'),
   })
 
   if (!validatedFields.success) {
@@ -128,20 +127,18 @@ export async function saveVideo(
     video_type,
     artist_id,
     original_song_id,
-    original_video_id,
   } = validatedFields.data
 
   const supabase = createClient()
 
   try {
-    const { error } = await supabase.from('videos_test').insert({
+    const { error } = await supabase.from('videos').insert({
       title,
       youtube_video_id,
       thumbnail_url,
       video_type,
       artist_id: artist_id || null, // 空文字の場合は null をDBに保存
       original_song_id: original_song_id || null,
-      original_video_id: original_video_id || null,
     })
 
     if (error) {
@@ -162,7 +159,7 @@ export async function saveVideo(
   }
 }
 
-// artists_testテーブルから検索するための型
+// artists_v2テーブルから検索するための型
 export interface ArtistSearchResult {
   id: string
   name: string
@@ -179,7 +176,7 @@ export async function searchArtists(
   const supabase = createClient()
   try {
     const { data, error } = await supabase
-      .from('artists_test')
+      .from('artists_v2')
       .select('id, name, image_url')
       .ilike('name', `%${query}%`) // あいまい検索
       .limit(5) // 最大5件まで
@@ -196,24 +193,22 @@ export async function searchArtists(
   }
 }
 
-// song_artists_test と artists_test の型を定義
-// artists_test の型（エラーに合わせて配列[]に変更）
+// song_artists と artists_v2 の型を定義
 interface ArtistName {
   name: string
 }
 
-// song_artists_test の型
+// song_artists の型
 interface ArtistForSong {
-  // Supabaseが（何故か）配列として返してくるので、型を配列[]に修正
-  artists_test: ArtistName[] | null
+  artists_v2: ArtistName | null
 }
 
-// songs_testテーブルから検索するための型
+// songs_v2テーブルから検索するための型
 export interface SongSearchResult {
   id: string
   title: string
   image_url: string | null
-  song_artists_test: ArtistForSong[]
+  song_artists: ArtistForSong[]
 }
 // ▲▲▲
 
@@ -227,13 +222,13 @@ export async function searchSongs(
   const supabase = createClient()
   try {
     const { data, error } = await supabase
-      .from('songs_test')
+      .from('songs_v2')
       .select(`
         id,
         title,
         image_url,
-        song_artists_test (
-          artists_test (
+        song_artists (
+          artists_v2 (
             name
           )
         )
@@ -243,8 +238,15 @@ export async function searchSongs(
 
     if (error) throw error
 
-    // ここでエラーが発生していたが、型の定義を修正したので解決
-    return { songs: data }
+    const songs: SongSearchResult[] = (data ?? []).map((song) => ({
+      ...song,
+      song_artists: (song.song_artists ?? []).map((relation) => ({
+        ...relation,
+        artists_v2: getFirstFromMaybeArray(relation.artists_v2),
+      })),
+    }))
+
+    return { songs }
   } catch (err: unknown) {
     console.error(err)
     if (err instanceof Error) {
@@ -254,19 +256,12 @@ export async function searchSongs(
   }
 }
 
-// videos_testテーブルから検索するための型
-// artists_test の型
-interface ArtistNameForVideo {
-  name: string
-}
-
-// videos_testテーブルから検索するための型
+// videosテーブルから検索するための型
 export interface VideoSearchResult {
   id: string
   title: string
   thumbnail_url: string | null
-  // Supabaseが配列として返してくるので、型を配列[]に修正
-  artists_test: ArtistNameForVideo[] | null 
+  artists_v2: { name: string | null } | null
 }
 
 export async function searchVideos(
@@ -278,15 +273,15 @@ export async function searchVideos(
 
   const supabase = createClient()
   try {
-    // videos_testテーブルを検索し、アーティスト名も取得
+    // videosテーブルを検索し、アーティスト名も取得
     // 「原曲」として登録されているものだけを検索
     const { data, error } = await supabase
-      .from('videos_test')
+      .from('videos')
       .select(`
         id,
         title,
         thumbnail_url,
-        artists_test (
+        artists_v2 (
           name
         )
       `)

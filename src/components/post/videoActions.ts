@@ -5,7 +5,7 @@ import { z } from 'zod'
 // TagSearch.tsx から Tag 型をインポート
 import type { Tag } from './TagSearch'
 // TagSearch.tsx が使っている既存のSpotify検索アクションをインポート
-import { searchMusic, searchArtistsAction} from '@/app/(main)/post/actions'
+import { searchMusic, searchArtistsAction } from '@/app/(main)/post/actions'
 
 // 1. YouTube API (videos.list) のための型定義
 interface YouTubeVideoListResponse {
@@ -60,7 +60,7 @@ export async function getVideoInfo(
   }
   const supabase = createClient()
   const { data: existingVideo, error: dbError } = await supabase
-    .from('videos_test')
+    .from('videos')
     .select('title, thumbnail_url, youtube_category_id')
     .eq('youtube_video_id', youtube_video_id)
     .single()
@@ -108,7 +108,6 @@ export async function getVideoInfo(
 /**
  * アクション2: 動画をDBに保存し、完成した「タグ」を返す
  */
-// ... (videoSchema と VideoWithArtist の型定義は変更ありません) ...
 const videoSchema = z.object({
   youtube_video_id: z.string(),
   title: z.string(),
@@ -120,7 +119,7 @@ const videoSchema = z.object({
 })
 type VideoWithArtist = {
   id: string
-  artists_test: { name: string }[] | null
+  artists_v2: { name: string } | null
 }
 
 export async function saveVideoAndCreateTag(
@@ -144,8 +143,8 @@ export async function saveVideoAndCreateTag(
   }
   const supabase = createClient()
   const { data: initialVideo, error } = await supabase
-    .from('videos_test')
-    .select('id, artists_test(name)')
+    .from('videos')
+    .select('id, artists_v2(name)')
     .eq('youtube_video_id', validatedFields.data.youtube_video_id)
     .single<VideoWithArtist>()
   if (error && error.code !== 'PGRST116') {
@@ -154,7 +153,7 @@ export async function saveVideoAndCreateTag(
   let video: VideoWithArtist | null = initialVideo
   if (!video) {
     const { data: newVideo, error: insertError } = await supabase
-      .from('videos_test')
+      .from('videos')
       .insert({
         youtube_video_id: validatedFields.data.youtube_video_id,
         title: validatedFields.data.title,
@@ -164,7 +163,7 @@ export async function saveVideoAndCreateTag(
         artist_id: validatedFields.data.artist_id,
         original_song_id: validatedFields.data.original_song_id,
       })
-      .select('id, artists_test(name)')
+      .select('id, artists_v2(name)')
       .single<VideoWithArtist>()
     if (insertError) {
       return { error: `DB保存エラー: ${insertError.message}` }
@@ -180,7 +179,7 @@ export async function saveVideoAndCreateTag(
       id: video.id,
       name: validatedFields.data.title,
       imageUrl: validatedFields.data.thumbnail_url,
-      artistName: video.artists_test?.[0]?.name || '不明',
+      artistName: video.artists_v2?.name || '不明',
       artistId: validatedFields.data.artist_id,
       youtube_video_id: validatedFields.data.youtube_video_id,
     },
@@ -230,7 +229,7 @@ export async function getOrCreateArtist(
   // ... (この関数は変更ありません) ...
   const supabase = createClient()
   const { data: existing, error: findError } = await supabase
-    .from('artists_test')
+    .from('artists_v2')
     .select('id, name')
     .eq('spotify_id', artist.id)
     .single()
@@ -241,7 +240,7 @@ export async function getOrCreateArtist(
     return existing
   }
   const { data: newArtist, error: insertError } = await supabase
-    .from('artists_test')
+    .from('artists_v2')
     .insert({
       name: artist.name,
       spotify_id: artist.id,
@@ -265,7 +264,7 @@ export async function getOrCreateSong(
 
   // 1. Spotify IDで既存の曲を検索
   const { data: existing, error: findError } = await supabase
-    .from('songs_test')
+    .from('songs_v2')
     .select('id')
     .eq('spotify_id', song.id)
     .single()
@@ -298,7 +297,7 @@ export async function getOrCreateSong(
 
   // 3. 曲を新規作成
   const { data: newSong, error: insertSongError } = await supabase
-    .from('songs_test')
+    .from('songs_v2')
     .insert({
       title: song.name,
       spotify_id: song.id,
@@ -311,9 +310,9 @@ export async function getOrCreateSong(
     return { error: `曲登録エラー: ${insertSongError?.message || '不明なエラー'}` }
   }
 
-  // 4. 中間テーブル (song_artists_test) に紐付け
+  // 4. 中間テーブル (song_artists) に紐付け
   const { error: junctionError } = await supabase
-    .from('song_artists_test')
+    .from('song_artists')
     .insert({
       song_id: newSong.id,
       artist_id: artistUuid, // これで artistUuid が安全に使える

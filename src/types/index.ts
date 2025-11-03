@@ -6,29 +6,45 @@ export type Profile = Database['public']['Tables']['profiles']['Row'] & {
 }
 export type Post = Database['public']['Tables']['posts']['Row']
 export type Like = Database['public']['Tables']['likes']['Row']
-export type Tag = Database['public']['Tables']['tags']['Row']
-export type Song = Database['public']['Tables']['songs']['Row']
-export type Artist = Database['public']['Tables']['artists']['Row']
-export type Live = Database['public']['Tables']['lives']['Row']
-export type Attendee = Database['public']['Tables']['attended_lives']['Row']
-export type SongInsert = Database['public']['Tables']['songs']['Insert']
-export type ArtistInsert = Database['public']['Tables']['artists']['Insert']
-export type TagInsert = Database['public']['Tables']['tags']['Insert']
-export type Video = Database['public']['Tables']['videos_test']['Row']
+export type Tag = Database['public']['Tables']['tags_v2']['Row']
+export type Song = Database['public']['Tables']['songs_v2']['Row']
+export type Artist = Database['public']['Tables']['artists_v2']['Row']
+export type Live = Database['public']['Tables']['lives_v2']['Row']
+export type Attendee = Database['public']['Tables']['attended_lives_v2']['Row']
+export type SongInsert = Database['public']['Tables']['songs_v2']['Insert']
+export type ArtistInsert = Database['public']['Tables']['artists_v2']['Insert']
+export type TagInsert = Database['public']['Tables']['tags_v2']['Insert']
+export type Video = Database['public']['Tables']['videos']['Row']
+
+type ArtistRelation = { artists_v2: Artist | Artist[] | null }
+
+export type SongWithArtists = Song & {
+  song_artists: ArtistRelation[] | null
+}
+
+export type LiveWithArtists = Live & {
+  live_artists: ArtistRelation[] | null
+  attended_lives_v2?: Pick<Attendee, 'user_id'>[]
+}
+
+export type VideoWithArtist = Video & {
+  artists_v2: Artist | null
+}
 
 export type TagWithRelations = Tag & {
-  songs: (Song & { artists: { id: string; name: string | null } | null }) | null
-  artists: Artist | null
-  lives: Live | null
-  videos_test?: (Video & { artists_test: Artist | null }) | null
+  songs_v2: SongWithArtists | null
+  artists_v2: Artist | null
+  lives_v2: LiveWithArtists | null
+  videos: VideoWithArtist | null
 }
+
 export type PostWithRelations = Post & {
   profiles: Profile | null
   likes: Pick<Like, 'user_id'>[]
   tags: TagWithRelations[]
   is_liked_by_user: boolean
 }
-export type LiveWithRelations = Live & {
-  artists: { name:string | null; image_url: string | null } | null
-  attended_lives: Pick<Attendee, 'user_id'>[]
+
+export type LiveWithRelations = LiveWithArtists & {
+  attended_lives_v2: Pick<Attendee, 'user_id'>[]
 }

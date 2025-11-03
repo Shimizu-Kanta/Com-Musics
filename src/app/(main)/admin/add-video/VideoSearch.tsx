@@ -45,7 +45,7 @@ export default function VideoSearch({ onVideoSelect, value }: VideoSearchProps) 
   }, [debouncedQuery, selectedTitle, query]) // queryが変更されたら検索
 
   const handleSelect = (video: VideoSearchResult) => {
-    const artistName = video.artists_test?.[0]?.name || '不明'
+    const artistName = video.artists_v2?.name || '不明'
     const displayTitle = `${video.title} (${artistName})`
     
     setQuery(displayTitle) // 自分のテキストを更新
@@ -70,7 +70,7 @@ export default function VideoSearch({ onVideoSelect, value }: VideoSearchProps) 
             onVideoSelect('') // 親に「IDは未選択状態になった」と通知
           }
         }}
-        placeholder="videos_test テーブル (原曲) を検索..."
+        placeholder="videos テーブル (原曲) を検索..."
         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2"
       />
       
@@ -83,7 +83,7 @@ export default function VideoSearch({ onVideoSelect, value }: VideoSearchProps) 
               <Image src={video.thumbnail_url || '/default-avatar.png'} alt={video.title} width={32} height={32} className="rounded-md mr-2" />
               <div>
                 <p className="font-semibold">{video.title}</p>
-                <p className="text-xs text-gray-500">{video.artists_test?.[0]?.name || '不明'}</p>
+                <p className="text-xs text-gray-500">{video.artists_v2?.name || '不明'}</p>
               </div>
             </li>
           ))}
