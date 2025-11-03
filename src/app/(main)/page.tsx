@@ -13,8 +13,8 @@ type SearchParams = {
 
 type FollowingRow = { following_id: string }
 type FavoriteArtistsJoinRow =
-  | { artists: Artist | null }
-  | { artists: Artist[] | null }
+  | { artists_v2: Artist | null }
+  | { artists_v2: Artist[] | null }
 
 const POSTS_PER_PAGE = 20;
 
@@ -35,12 +35,15 @@ export default async function HomePage({
 
   let favoriteArtists: Artist[] = []
   if (user) {
-    const { data: favArtistData } = await supabase.from('favorite_artists').select('artists(*)').eq('user_id', user.id).order('sort_order')
+    const { data: favArtistData } = await supabase.from('favorite_artists_v2').select('artists_v2(*)').eq('user_id', user.id).order('sort_order')
     if (favArtistData) {
       favoriteArtists = favArtistData
-        .map((item: FavoriteArtistsJoinRow) => item.artists)
-        .flat()
-        .filter((artist): artist is Artist => artist !== null);
+        .flatMap((item: FavoriteArtistsJoinRow) => {
+          const artists = item.artists_v2
+          if (!artists) return []
+          return Array.isArray(artists) ? artists : [artists]
+        })
+        .filter((artist): artist is Artist => artist !== null)
     }
   }
 
@@ -49,7 +52,18 @@ export default async function HomePage({
   try {
     let query = supabase
       .from('posts')
-      .select('*, profiles!inner(*), likes(user_id), tags(*, songs(*, artists(*)), artists(*), lives(*, artists(*)), videos_test(*, artists_test(*)))')
+      .select(`
+        *,
+        profiles!inner(*),
+        likes(user_id),
+        tags:tags_v2(
+          *,
+          songs_v2(*, song_artists(*, artists_v2(*))),
+          artists_v2(*),
+          lives_v2(*, live_artists(*, artists_v2(*))),
+          videos(*, artists_v2(*))
+        )
+      `)
       .order('created_at', { ascending: false })
       
     // ▼▼▼【重要】ここにも賢い調査方法を実装します ▼▼▼
@@ -65,17 +79,23 @@ export default async function HomePage({
       }
     } else if (sp.artistId) {
       const allPostIds = new Set<number>()
-      const { data: directTags } = await supabase.from('tags').select('post_id').eq('artist_id', sp.artistId)
+      const { data: directTags } = await supabase.from('tags_v2').select('post_id').eq('artist_id', sp.artistId)
       directTags?.forEach(t => allPostIds.add(t.post_id))
-      const { data: songIds } = await supabase.from('songs').select('id').eq('artist_id', sp.artistId)
-      if (songIds && songIds.length > 0) {
-        const { data: songTags } = await supabase.from('tags').select('post_id').in('song_id', songIds.map(s => s.id))
+      const { data: songIdRows } = await supabase.from('song_artists').select('song_id').eq('artist_id', sp.artistId)
+      const songIds = songIdRows?.map(row => row.song_id) ?? []
+      if (songIds.length > 0) {
+        const { data: songTags } = await supabase.from('tags_v2').select('post_id').in('song_id', songIds)
         songTags?.forEach(t => allPostIds.add(t.post_id))
       }
       const { data: liveIds } = await supabase.from('live_artists').select('live_id').eq('artist_id', sp.artistId)
       if (liveIds && liveIds.length > 0) {
-        const { data: liveTags } = await supabase.from('tags').select('post_id').in('live_id', liveIds.map(l => l.live_id))
+        const { data: liveTags } = await supabase.from('tags_v2').select('post_id').in('live_id', liveIds.map(l => l.live_id))
         liveTags?.forEach(t => allPostIds.add(t.post_id))
+      }
+      const { data: videoIds } = await supabase.from('videos').select('id').eq('artist_id', sp.artistId)
+      if (videoIds && videoIds.length > 0) {
+        const { data: videoTags } = await supabase.from('tags_v2').select('post_id').in('video_id', videoIds.map(v => v.id))
+        videoTags?.forEach(t => allPostIds.add(t.post_id))
       }
       
       const uniquePostIds = Array.from(allPostIds)

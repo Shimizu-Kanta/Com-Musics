@@ -22,11 +22,17 @@ export default function TimelineTabs() {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const { data: favArtistsData } = await supabase
-          .from('favorite_artists')
-          .select('artists(*)')
+          .from('favorite_artists_v2')
+          .select('artists_v2(*)')
           .eq('user_id', user.id)
-        
-        const artists = favArtistsData?.map(item => item.artists).filter(Boolean) as Artist[] | undefined
+
+        const artists = favArtistsData
+          ?.flatMap(item => {
+            const relation = item.artists_v2
+            if (!relation) return []
+            return Array.isArray(relation) ? relation : [relation]
+          })
+          .filter(Boolean) as Artist[] | undefined
         if (artists) {
           setFavoriteArtists(artists)
         }

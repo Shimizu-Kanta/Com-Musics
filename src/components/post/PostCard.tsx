@@ -14,13 +14,14 @@ function MusicLinkModal({ tag, onClose }: { tag: TagWithRelations; onClose: () =
   let searchTerm = ''
   let subText = ''
 
-  if (tag.songs) {
-    const song = tag.songs
-    searchTerm = `${song.name || ''} ${song.artists?.name || ''}`
-    subText = `${song.name} (${song.artists?.name || 'Unknown Artist'})`
-  } else if (tag.artists) {
-    searchTerm = tag.artists.name || ''
-    subText = tag.artists.name || ''
+  if (tag.songs_v2) {
+    const song = tag.songs_v2
+    const primaryArtist = song.song_artists?.[0]?.artists_v2
+    searchTerm = `${song.title || ''} ${primaryArtist?.name || ''}`
+    subText = `${song.title} (${primaryArtist?.name || 'Unknown Artist'})`
+  } else if (tag.artists_v2) {
+    searchTerm = tag.artists_v2.name || ''
+    subText = tag.artists_v2.name || ''
   }
 
   const encodedSearchTerm = encodeURIComponent(searchTerm.trim())
@@ -75,7 +76,7 @@ export default function PostCard({ post }: { post: PostWithRelations }) {
 
   const openModal = (tag: TagWithRelations) => {
     // ▼ ライブと動画はモーダル非対象（動画は外部URLを開く設計）
-    if (tag.lives || ('videos_test' in tag && tag.videos_test)) return
+    if (tag.lives_v2 || tag.videos) return
     setModalTag(tag)
     setIsModalOpen(true)
   }

@@ -3,10 +3,6 @@ import type { TagWithRelations } from '@/types'
 import Image from 'next/image'
 import { MusicalNoteIcon, UserCircleIcon, TicketIcon, PlayCircleIcon } from '@heroicons/react/24/solid'
 
-type LiveWithArtist = TagWithRelations['lives'] & {
-  artists: { name: string | null } | null
-}
-
 type TagComponentProps = {
   tag: TagWithRelations
   onTagClick: (tag: TagWithRelations) => void
@@ -14,16 +10,18 @@ type TagComponentProps = {
 
 export default function TagComponent({ tag, onTagClick }: TagComponentProps) {
   // 楽曲タグ
-  if (tag.songs) {
+  if (tag.songs_v2) {
+    const song = tag.songs_v2
+    const primaryArtist = song.song_artists?.[0]?.artists_v2
     return (
       <button
         onClick={() => onTagClick(tag)}
         className="bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-1 rounded-full flex items-center hover:bg-blue-200 pr-3"
       >
-        {tag.songs.album_art_url ? (
+        {song.image_url ? (
           <Image
-            src={tag.songs.album_art_url}
-            alt={tag.songs.name}
+            src={song.image_url}
+            alt={song.title}
             width={24}
             height={24}
             className="rounded-full w-5 h-5 mr-1.5 object-cover"
@@ -31,22 +29,25 @@ export default function TagComponent({ tag, onTagClick }: TagComponentProps) {
         ) : (
           <MusicalNoteIcon className="w-4 h-4 mr-1.5" />
         )}
-        <span>{tag.songs.name} - {tag.songs.artists?.name || 'Unknown Artist'}</span>
+        <span>
+          {song.title} - {primaryArtist?.name || 'Unknown Artist'}
+        </span>
       </button>
     )
   }
 
   // アーティストタグ
-  if (tag.artists) {
+  if (tag.artists_v2) {
+    const artist = tag.artists_v2
     return (
       <button
         onClick={() => onTagClick(tag)}
         className="bg-purple-100 text-purple-800 text-sm font-medium px-2.5 py-1 rounded-full flex items-center hover:bg-purple-200 pr-3"
       >
-        {tag.artists.image_url ? (
+        {artist.image_url ? (
           <Image
-            src={tag.artists.image_url}
-            alt={tag.artists.name}
+            src={artist.image_url}
+            alt={artist.name}
             width={24}
             height={24}
             className="rounded-full w-5 h-5 mr-1.5 object-cover"
@@ -54,21 +55,22 @@ export default function TagComponent({ tag, onTagClick }: TagComponentProps) {
         ) : (
           <UserCircleIcon className="w-4 h-4 mr-1.5" />
         )}
-        <span>{tag.artists.name}</span>
+        <span>{artist.name}</span>
       </button>
     )
   }
 
   // ライブタグ
-  if (tag.lives) {
-    const live = tag.lives as LiveWithArtist
+  if (tag.lives_v2) {
+    const live = tag.lives_v2
+    const liveArtist = live.live_artists?.[0]?.artists_v2
     return (
       <div className="bg-green-100 text-green-800 text-sm font-medium px-2.5 py-1 rounded-full flex items-center">
         <TicketIcon className="w-4 h-4 mr-1.5" />
         <div>
           <span className="font-bold">{live.name}</span>
           <div className="text-xs text-green-700">
-            {live.artists?.name || 'アーティスト未登録'} / {live.venue} / {live.live_date}
+            {liveArtist?.name || 'アーティスト未登録'} / {live.venue} / {live.live_date}
           </div>
         </div>
       </div>
@@ -76,20 +78,14 @@ export default function TagComponent({ tag, onTagClick }: TagComponentProps) {
   }
 
   // ▼▼▼ 動画タグ（YouTubeリンク対応版） ▼▼▼
-  if ('videos_test' in tag && tag.videos_test) {
-    const video = tag.videos_test as {
-      id: string
-      title?: string | null
-      thumbnail_url?: string | null
-      youtube_video_id?: string | null
-      artists_test?: { name: string | null } | null
-    }
+  if (tag.videos) {
+    const video = tag.videos
 
     const videoTitle = video.title ?? '動画'
-    const artistName = video.artists_test?.name ?? null
-    
+    const artistName = video.artists_v2?.name ?? null
+
     // YouTube URLを生成
-    const youtubeUrl = video.youtube_video_id 
+    const youtubeUrl = video.youtube_video_id
       ? `https://www.youtube.com/watch?v=${video.youtube_video_id}`
       : null
 

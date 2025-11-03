@@ -23,12 +23,18 @@ export default function Sidebar() {
 
       if (user) {
         const { data } = await supabase
-          .from('favorite_artists')
-          .select('artists(*)')
+          .from('favorite_artists_v2')
+          .select('artists_v2(*)')
           .eq('user_id', user.id)
           .order('sort_order')
-        
-        const artists = data?.flatMap(fav => fav.artists).filter(Boolean) as Artist[] || []
+
+        const artists = data
+          ?.flatMap(fav => {
+            const relation = fav.artists_v2
+            if (!relation) return []
+            return Array.isArray(relation) ? relation : [relation]
+          })
+          .filter(Boolean) as Artist[] || []
         setFavoriteArtists(artists)
       }
     }

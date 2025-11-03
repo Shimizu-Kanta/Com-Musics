@@ -5,30 +5,27 @@ import { type Tag } from '@/components/post/TagSearch'
 import { type Profile } from '@/types'
 import { type Database } from '@/types/database'
 
-type ArtistFromDB = Database['public']['Tables']['artists']['Row']
+type ArtistFromDB = Database['public']['Tables']['artists_v2']['Row']
 
-// favorite_songs の join 結果に合わせて配列前提の型を定義する
+// favorite_songs_v2 の join 結果に合わせて配列前提の型を定義する
 type ArtistLite = { id: string; name: string | null }
 type SongFromDB = {
   id: string
-  name: string | null
-  album_art_url: string | null
-  artists: ArtistLite[]
+  title: string | null
+  image_url: string | null
+  song_artists: { artists_v2: ArtistLite | null }[]
 }
 
-// videos_test は select した列だけに合わせた軽量型
 type VideoLite = {
   id: string
   title: string | null
   thumbnail_url: string | null
   youtube_video_id: string | null
   artist_id: string | null
-  // artists_test は 1件 or 配列 or null の可能性を吸収
-  artists_test: { name: string | null } | { name: string | null }[] | null
+  artists_v2: { name: string | null } | null
 }
 
-// favorite_artists の join は artists が配列で返る前提
-type FavArtistJoinRow = { artists: ArtistFromDB[] }
+type FavArtistJoinRow = { artists_v2: ArtistFromDB | ArtistFromDB[] | null }
 
 export const dynamic = 'force-dynamic'
 
@@ -59,65 +56,70 @@ export default async function EditProfilePage({
   // --- Favorite Songs ---
   // songs が配列で返る前提に変更
   const { data: favSongsData } = await supabase
-    .from('favorite_songs')
-    .select('songs(id, name, album_art_url, artists(id, name))')
+    .from('favorite_songs_v2')
+    .select('songs_v2(id, title, image_url, song_artists(artists_v2(id, name)))')
     .eq('user_id', profile.id)
     .order('sort_order')
 
-  const initialFavoriteSongs: Tag[] =
-    ((favSongsData ?? []) as unknown as { songs: SongFromDB[] }[])
-      .flatMap(({ songs }) => songs ?? [])
-      .map((song) => {
-        const artist = song.artists?.[0] ?? null
+  const favoriteSongRows = (favSongsData ?? []) as { songs_v2: SongFromDB | SongFromDB[] | null }[]
+  const initialFavoriteSongs: Tag[] = favoriteSongRows
+    .flatMap(({ songs_v2 }) => {
+      const songs = Array.isArray(songs_v2) ? songs_v2 : songs_v2 ? [songs_v2] : []
+      return songs
+    })
+    .map((song) => {
+        const artist = song.song_artists?.[0]?.artists_v2 ?? null
         const tag: Tag = {
           type: 'song',
           id: song.id,
-          name: song.name ?? '',
+          name: song.title ?? '',
           artistName: artist?.name ?? 'Unknown Artist',
           artistId: artist?.id ?? undefined,
-          imageUrl: song.album_art_url ?? undefined,
+          imageUrl: song.image_url ?? undefined,
         }
         return tag
       })
 
   // --- Favorite Artists ---
   const { data: favArtistsData } = await supabase
-    .from('favorite_artists')
-    .select('artists(*)')
+    .from('favorite_artists_v2')
+    .select('artists_v2(*)')
     .eq('user_id', profile.id)
     .order('sort_order')
 
-  const initialFavoriteArtists: Tag[] =
-    ((favArtistsData ?? []) as unknown as FavArtistJoinRow[])
-      .flatMap(({ artists }) => {
-        const artist = artists?.[0] ?? null
-        if (!artist) return []
-        const tag: Tag = {
-          type: 'artist',
-          id: artist.id,
-          name: artist.name,
-          imageUrl: artist.image_url ?? undefined,
-        }
-        return [tag]
-      })
+  const favoriteArtistRows = (favArtistsData ?? []) as FavArtistJoinRow[]
+  const initialFavoriteArtists: Tag[] = favoriteArtistRows
+    .flatMap(({ artists_v2 }) => {
+      const artists = Array.isArray(artists_v2) ? artists_v2 : artists_v2 ? [artists_v2] : []
+      const artist = artists[0] ?? null
+      if (!artist) return []
+      const tag: Tag = {
+        type: 'artist',
+        id: artist.id,
+        name: artist.name,
+        imageUrl: artist.image_url ?? undefined,
+      }
+      return [tag]
+    })
 
   // --- Favorite Videos ---
   const { data: favVideosData } = await supabase
-    .from('favorite_videos_test')
+    .from('favorite_videos')
     .select(
-      'videos_test(id, title, thumbnail_url, youtube_video_id, artist_id, artists_test(name))'
+      'videos(id, title, thumbnail_url, youtube_video_id, artist_id, artists_v2(name))'
     )
     .eq('user_id', profile.id)
     .order('sort_order')
 
-  // videos_test が配列で返る前提に変更し、フラット化して Tag に変換
-  const initialFavoriteVideos: Tag[] =
-    ((favVideosData ?? []) as unknown as { videos_test: VideoLite[] }[])
-      .flatMap(({ videos_test }) => videos_test ?? [])
-      .map((video) => {
-        const artistRel = Array.isArray(video.artists_test)
-          ? video.artists_test[0] ?? null
-          : video.artists_test
+  // videos が配列で返る前提に変更し、フラット化して Tag に変換
+  const favoriteVideoRows = (favVideosData ?? []) as { videos: VideoLite | VideoLite[] | null }[]
+  const initialFavoriteVideos: Tag[] = favoriteVideoRows
+    .flatMap(({ videos }) => {
+      const collection = Array.isArray(videos) ? videos : videos ? [videos] : []
+      return collection
+    })
+    .map((video) => {
+        const artistRel = video.artists_v2
         const tag: Tag = {
           type: 'video',
           id: video.id,
