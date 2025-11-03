@@ -1,5 +1,6 @@
 // src/components/post/TagComponent.tsx
 import type { TagWithRelations } from '@/types'
+import { getPrimaryArtistFromRelation } from '@/lib/relations'
 import Image from 'next/image'
 import { MusicalNoteIcon, UserCircleIcon, TicketIcon, PlayCircleIcon } from '@heroicons/react/24/solid'
 
@@ -12,7 +13,7 @@ export default function TagComponent({ tag, onTagClick }: TagComponentProps) {
   // 楽曲タグ
   if (tag.songs_v2) {
     const song = tag.songs_v2
-    const primaryArtist = song.song_artists?.[0]?.artists_v2
+    const primaryArtist = getPrimaryArtistFromRelation(song.song_artists)
     return (
       <button
         onClick={() => onTagClick(tag)}
@@ -63,7 +64,7 @@ export default function TagComponent({ tag, onTagClick }: TagComponentProps) {
   // ライブタグ
   if (tag.lives_v2) {
     const live = tag.lives_v2
-    const liveArtist = live.live_artists?.[0]?.artists_v2
+    const liveArtist = getPrimaryArtistFromRelation(live.live_artists)
     return (
       <div className="bg-green-100 text-green-800 text-sm font-medium px-2.5 py-1 rounded-full flex items-center">
         <TicketIcon className="w-4 h-4 mr-1.5" />

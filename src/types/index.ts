@@ -16,12 +16,14 @@ export type ArtistInsert = Database['public']['Tables']['artists_v2']['Insert']
 export type TagInsert = Database['public']['Tables']['tags_v2']['Insert']
 export type Video = Database['public']['Tables']['videos']['Row']
 
+type ArtistRelation = { artists_v2: Artist | Artist[] | null }
+
 export type SongWithArtists = Song & {
-  song_artists: { artists_v2: Artist | null }[] | null
+  song_artists: ArtistRelation[] | null
 }
 
 export type LiveWithArtists = Live & {
-  live_artists: { artists_v2: Artist | null }[] | null
+  live_artists: ArtistRelation[] | null
   attended_lives_v2?: Pick<Attendee, 'user_id'>[]
 }
 

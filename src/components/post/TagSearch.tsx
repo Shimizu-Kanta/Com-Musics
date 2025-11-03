@@ -5,16 +5,18 @@ import { useState, useTransition, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { MusicalNoteIcon, PlusIcon, VideoCameraIcon } from '@heroicons/react/24/solid' // VideoCameraIcon をインポート
+import { getPrimaryArtistFromRelation } from '@/lib/relations'
 
 // 型定義
 type TrackSearchResult = { id: string; name: string; artist: string; artistId: string; albumArtUrl?: string }
 type ArtistSearchResult = { id: string; name: string; imageUrl?: string }
+type LiveArtistRelation = { artists_v2: { name: string | null } | { name: string | null }[] | null }
 type LiveSearchResult = {
   id: string;
   name: string;
   venue: string | null;
   live_date: string | null;
-  live_artists: { artists_v2: { name: string | null } | null }[] | null;
+  live_artists: LiveArtistRelation[] | null;
 }
 type SearchResultItem = TrackSearchResult | ArtistSearchResult | LiveSearchResult
 
@@ -88,8 +90,7 @@ export default function TagSearch({ onTagSelect, onClose, searchOnly, onVideoUrl
     if ('artistId' in item) { // Song
       onTagSelect({ type: 'song', id: item.id, name: item.name, artistName: item.artist, artistId: item.artistId, imageUrl: item.albumArtUrl })
     } else if ('venue' in item) { // Live
-      const liveArtists = item.live_artists ?? []
-      const primaryArtist = liveArtists[0]?.artists_v2
+      const primaryArtist = getPrimaryArtistFromRelation(item.live_artists)
       onTagSelect({ type: 'live', id: item.id, name: item.name, artistName: primaryArtist?.name || undefined, venue: item.venue || undefined, liveDate: item.live_date || undefined })
     } else { // Artist
       onTagSelect({ type: 'artist', id: item.id, name: item.name, imageUrl: item.imageUrl })
@@ -220,7 +221,7 @@ export default function TagSearch({ onTagSelect, onClose, searchOnly, onVideoUrl
                     <li key={item.id} onClick={() => handleSelect(item)} className="p-2 hover:bg-gray-100 cursor-pointer">
                       <p className="font-bold">{item.name}</p>
                       <div className="text-xs text-gray-500 pl-2">
-                        <p>{item.live_artists?.[0]?.artists_v2?.name || 'アーティスト未登録'}</p>
+                        <p>{getPrimaryArtistFromRelation(item.live_artists)?.name || 'アーティスト未登録'}</p>
                         <p>{item.venue} / {item.live_date}</p>
                       </div>
                     </li>

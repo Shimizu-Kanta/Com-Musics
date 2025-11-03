@@ -9,14 +9,17 @@ import { type Tag } from '@/components/post/TagSearch'
 import Image from 'next/image'
 import PostList from '@/components/post/PostList'
 import { type PostWithRelations } from '@/types'
+import { getPrimaryArtistFromRelation } from '@/lib/relations'
 import AttendedLivesSection from '@/components/profile/AttendedLivesSection'
 
 const POSTS_PER_PAGE = 20
 
 type PageParams = { userId: string }
 
+type ArtistLite = { id: string; name: string | null }
+type SongArtistRelation = { artists_v2: ArtistLite | ArtistLite[] | null }
 type Song = Database['public']['Tables']['songs_v2']['Row'] & {
-  song_artists: { artists_v2: { name: string | null; id: string } | null }[]
+  song_artists: SongArtistRelation[] | null
 }
 type Artist = Database['public']['Tables']['artists_v2']['Row']
 type Live = Database['public']['Tables']['lives_v2']['Row'] & {
@@ -87,7 +90,7 @@ export default async function ProfilePage({ params }: { params: Promise<PagePara
     id: live.id,
     name: live.name,
     live_date: live.live_date,
-    artists: live.live_artists?.[0]?.artists_v2 ?? null,
+    artists: getPrimaryArtistFromRelation(live.live_artists),
   }))
 
   const { data: favSongsData } = await supabase
@@ -99,7 +102,7 @@ export default async function ProfilePage({ params }: { params: Promise<PagePara
   // 2. お気に入り楽曲タグにimageUrlを追加
   const favoriteSongTags: Tag[] = (favSongsData as FavoriteSongRow[] | null)?.map(row => {
     const song = row.songs_v2
-    const primaryArtist = song?.song_artists?.[0]?.artists_v2
+    const primaryArtist = song ? getPrimaryArtistFromRelation(song.song_artists) : null
     return {
       id: song?.id || '',
       name: song?.title || '',

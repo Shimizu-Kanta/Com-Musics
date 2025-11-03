@@ -4,16 +4,18 @@ import EditProfileForm from '@/components/profile/EditProfileForm'
 import { type Tag } from '@/components/post/TagSearch'
 import { type Profile } from '@/types'
 import { type Database } from '@/types/database'
+import { getPrimaryArtistFromRelation } from '@/lib/relations'
 
 type ArtistFromDB = Database['public']['Tables']['artists_v2']['Row']
 
 // favorite_songs_v2 の join 結果に合わせて配列前提の型を定義する
 type ArtistLite = { id: string; name: string | null }
+type SongArtistRelation = { artists_v2: ArtistLite | ArtistLite[] | null }
 type SongFromDB = {
   id: string
   title: string | null
   image_url: string | null
-  song_artists: { artists_v2: ArtistLite | null }[]
+  song_artists: SongArtistRelation[] | null
 }
 
 type VideoLite = {
@@ -68,13 +70,13 @@ export default async function EditProfilePage({
       return songs
     })
     .map((song) => {
-        const artist = song.song_artists?.[0]?.artists_v2 ?? null
+        const primaryArtist = getPrimaryArtistFromRelation(song.song_artists)
         const tag: Tag = {
           type: 'song',
           id: song.id,
           name: song.title ?? '',
-          artistName: artist?.name ?? 'Unknown Artist',
-          artistId: artist?.id ?? undefined,
+          artistName: primaryArtist?.name ?? 'Unknown Artist',
+          artistId: primaryArtist?.id ?? undefined,
           imageUrl: song.image_url ?? undefined,
         }
         return tag

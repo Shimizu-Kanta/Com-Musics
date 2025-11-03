@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 import type { PostWithRelations, TagWithRelations } from '@/types'
+import { getPrimaryArtistFromRelation } from '@/lib/relations'
 import LikeButton from './LikeButton'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -16,7 +17,7 @@ function MusicLinkModal({ tag, onClose }: { tag: TagWithRelations; onClose: () =
 
   if (tag.songs_v2) {
     const song = tag.songs_v2
-    const primaryArtist = song.song_artists?.[0]?.artists_v2
+    const primaryArtist = getPrimaryArtistFromRelation(song.song_artists)
     searchTerm = `${song.title || ''} ${primaryArtist?.name || ''}`
     subText = `${song.title} (${primaryArtist?.name || 'Unknown Artist'})`
   } else if (tag.artists_v2) {
