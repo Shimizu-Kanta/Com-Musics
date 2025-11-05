@@ -28,6 +28,31 @@ const FormSchema = z.object({
   { path: ['artistDbIds'], message: 'アーティストを1組以上選択してください' }
 )
 
+export async function toggleAttendance(liveId: number) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'ログインが必要です。' }
+
+  const { data: existing } = await supabase
+    .from('attended_lives_v2')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('live_id', liveId)
+    .maybeSingle()
+
+  if (existing) {
+    const { error } = await supabase.from('attended_lives_v2').delete().eq('id', existing.id)
+    if (error) return { error: '参加の取り消しに失敗しました。' }
+    revalidatePath('/live'); revalidatePath(`/${user.id}`)
+    return { success: true, attended: false }
+  } else {
+    const { error } = await supabase.from('attended_lives_v2').insert({ user_id: user.id, live_id: liveId })
+    if (error) return { error: '参加記録の追加に失敗しました。' }
+    revalidatePath('/live'); revalidatePath(`/${user.id}`)
+    return { success: true, attended: true }
+  }
+}
+
 export async function createLive(
   _prev: LiveActionState,
   formData: FormData
