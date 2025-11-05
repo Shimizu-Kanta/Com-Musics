@@ -4,20 +4,18 @@ import { useMemo, useState, useActionState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useFormStatus } from 'react-dom'
 import Image from 'next/image'
-import { createClient } from '@/lib/supabase/server'
-import { createLiveV2 } from '@/app/(main)/live/actions'
+import { createClient } from '@/lib/supabase/client' // ブラウザ用クライアント
+import { createLive } from '@/app/(main)/live/actions'
 import TagSearch, { type Tag } from '@/components/post/TagSearch'
 
-/** サーバーアクション返却と揃える */
 type LiveActionIssue = { field: string; code: string; message: string }
 type LiveActionState = { error?: string; success?: string; errors?: LiveActionIssue[] } | null
 
-/** 選択済みアーティスト（DB or Spotify） */
 type SelectedArtist =
-  | { key: string; kind: 'db'; name: string; imageUrl?: string | null; dbId: string }           // artists_v2.id(UUID)
-  | { key: string; kind: 'spotify'; name: string; imageUrl?: string | null; spotifyId: string }  // 22桁
+  | { key: string; kind: 'db'; name: string; imageUrl?: string | null; dbId: string }
+  | { key: string; kind: 'spotify'; name: string; imageUrl?: string | null; spotifyId: string }
 
-/** 小ユーティリティ */
+// 小ユーティリティ
 function clsx(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(' ')
 }
@@ -55,7 +53,7 @@ export default function NewLiveForm({ venues }: { venues: string[] }) {
   const searchParams = useSearchParams()
   const prefilledName = searchParams.get('name') || ''
 
-  // 旧画面からの事前指定（DB既存）を初期値に反映
+  // 旧導線からの初期指定（DB既存を想定）
   const preArtistId = searchParams.get('artistId')
   const preArtistName = searchParams.get('artistName') || ''
   const preArtistImage = searchParams.get('artistImageUrl')
@@ -72,9 +70,9 @@ export default function NewLiveForm({ venues }: { venues: string[] }) {
       : []
   )
 
-  const [actionState, formAction] = useActionState<LiveActionState, FormData>(createLiveV2, null)
+  const [actionState, formAction] = useActionState<LiveActionState, FormData>(createLive, null)
 
-  /** フィールド別エラー整形 */
+  // フィールド別エラー
   const fieldErrors = useMemo(() => {
     const map = new Map<string, LiveActionIssue[]>()
     for (const issue of actionState?.errors ?? []) {
@@ -87,9 +85,8 @@ export default function NewLiveForm({ venues }: { venues: string[] }) {
   }, [actionState?.errors])
   const hasErr = (f: string) => (fieldErrors.get(f)?.length ?? 0) > 0
 
-  /** TagSearch（Spotify検索）から選択されたときの処理 */
+  // Spotify検索の選択ハンドラ（TagSearch）
   const handleTagSelect = async (tag: Tag) => {
-    // name / imageUrl を型安全に取り出し
     const tagId = getId(tag)
     const name =
       getStringProp(tag, 'name') ??
@@ -99,17 +96,12 @@ export default function NewLiveForm({ venues }: { venues: string[] }) {
       getStringProp(tag, 'imageUrl') ??
       getStringProp(tag, 'image_url')
 
-    // 優先: 明示の spotifyId プロパティ、無ければ id が22桁ならSpotify IDとみなす
+    // 明示の spotifyId があれば優先、無ければ id が22桁ならSpotify ID扱い
     const spotifyIdFromProp = getStringProp(tag, 'spotifyId')
-    const spotifyId =
-      spotifyIdFromProp ??
-      (tagId && isSpotifyId(tagId) ? tagId : null)
+    const spotifyId = spotifyIdFromProp ?? (tagId && isSpotifyId(tagId) ? tagId : null)
 
-    // id が UUID なら DB レコードとして扱う
-    const dbId =
-      tagId && isUUID(tagId) ? tagId : null
-
-    // 既存DBのUUIDを直接もらえた場合
+    // id が UUID なら DBレコードとして追加
+    const dbId = tagId && isUUID(tagId) ? tagId : null
     if (dbId) {
       setSelected((prev) => {
         if (prev.some((p) => p.kind === 'db' && p.dbId === dbId)) return prev
@@ -118,19 +110,16 @@ export default function NewLiveForm({ venues }: { venues: string[] }) {
       return
     }
 
-    // Spotify ID の場合は DB に存在するかチェック → あればDB扱い、無ければ Spotify扱いで保持
+    // Spotify ID → DBに存在すれば DB として、無ければ Spotifyとして保持
     if (spotifyId) {
-      if (selected.some((p) => p.kind === 'spotify' && p.spotifyId === spotifyId)) return
-
       const supabase = createClient()
-
-      const { data: exists, error } = await supabase
+      const { data: exists } = await supabase
         .from('artists_v2')
         .select('id, name, image_url')
         .eq('spotify_id', spotifyId)
         .maybeSingle()
 
-      if (!error && exists?.id) {
+      if (exists?.id) {
         setSelected((prev) => {
           if (prev.some((p) => p.kind === 'db' && p.dbId === exists.id)) return prev
           return [
@@ -147,23 +136,10 @@ export default function NewLiveForm({ venues }: { venues: string[] }) {
       } else {
         setSelected((prev) => {
           if (prev.some((p) => p.kind === 'spotify' && p.spotifyId === spotifyId)) return prev
-          return [
-            ...prev,
-            {
-              key: `sp:${spotifyId}`,
-              kind: 'spotify',
-              name,
-              imageUrl,
-              spotifyId,
-            },
-          ]
+          return [...prev, { key: `sp:${spotifyId}`, kind: 'spotify', name, imageUrl, spotifyId }]
         })
       }
-      return
     }
-
-    // 識別できないタグ（名前だけ等）はスキップ
-    console.warn('Unrecognized tag from TagSearch:', tag)
   }
 
   const removeSelected = (key: string) => {
@@ -174,7 +150,7 @@ export default function NewLiveForm({ venues }: { venues: string[] }) {
 
   return (
     <form action={formAction} className="space-y-6">
-      {/* フォーム全体のエラー */}
+      {/* トップエラー */}
       {actionState?.error && (
         <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           <p className="font-medium">{actionState.error}</p>
@@ -187,84 +163,52 @@ export default function NewLiveForm({ venues }: { venues: string[] }) {
           ライブ名 <span className="text-red-500">*</span>
         </label>
         <input
-          id="name"
-          name="name"
-          type="text"
-          defaultValue={prefilledName}
-          required
+          id="name" name="name" type="text" defaultValue={prefilledName} required
           aria-invalid={hasErr('name')}
-          className={clsx(
-            'w-full rounded-md border p-2 shadow-sm',
-            hasErr('name') ? 'border-red-300 focus:border-red-400' : 'border-gray-300'
-          )}
+          className={clsx('w-full rounded-md border p-2 shadow-sm', hasErr('name') ? 'border-red-300 focus:border-red-400' : 'border-gray-300')}
           placeholder="例: Summer Night Tour 2025"
         />
-        {fieldErrors.get('name')?.map((e, i) => (
-          <p key={i} className="mt-1 text-xs text-red-600">
-            {e.message} <span className="opacity-60">[{e.code}]</span>
-          </p>
-        ))}
       </div>
 
-      {/* アーティスト（Spotify検索→選択→hiddenで送信） */}
+      {/* アーティスト（Spotify検索 → 選択 → hidden送信） */}
       <div>
         <label className="mb-1 block text-sm font-medium text-gray-700">
           アーティスト（複数可） <span className="text-red-500">*</span>
         </label>
 
-        {/* 選択済みバッジ */}
         {selected.length > 0 && (
           <ul className="mb-2 flex flex-wrap gap-2">
             {selected.map((s) => (
               <li key={s.key} className="flex items-center gap-2 rounded-full border px-2 py-1">
                 {s.imageUrl ? (
-                  <Image
-                    src={s.imageUrl}
-                    alt={s.name}
-                    width={20}
-                    height={20}
-                    className="rounded-full"
-                  />
+                  <Image src={s.imageUrl} alt={s.name} width={20} height={20} className="rounded-full" />
                 ) : null}
                 <span className="text-sm">{s.name}</span>
                 <span className="rounded bg-gray-100 px-1 text-[10px] text-gray-600">
                   {s.kind === 'db' ? 'DB' : 'Spotify'}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => removeSelected(s.key)}
-                  className="text-xs text-gray-500 hover:text-gray-700"
-                  aria-label={`${s.name} を外す`}
-                >
+                <button type="button" onClick={() => removeSelected(s.key)}
+                  className="text-xs text-gray-500 hover:text-gray-700" aria-label={`${s.name} を外す`}>
                   ×
                 </button>
 
-                {/* 送信用 hidden（DB→artistDbIds[], Spotify→artistSpotifyIds[]） */}
+                {/* 送信用 hidden */}
                 {s.kind === 'db' && (
                   <input type="hidden" name="artistDbIds[]" value={s.dbId} />
                 )}
                 {s.kind === 'spotify' && (
-                  <input type="hidden" name="artistSpotifyIds[]" value={s.spotifyId} />
+                  <>
+                    <input type="hidden" name="artistSpotifyIds[]" value={s.spotifyId} />
+                    <input type="hidden" name="artistNames[]" value={s.name} />
+                    <input type="hidden" name="artistImages[]" value={s.imageUrl ?? ''} />
+                  </>
                 )}
               </li>
             ))}
           </ul>
         )}
 
-        {/* 既存の Spotify 検索UI（TagSearch）をそのまま利用 */}
-        <TagSearch
-          searchOnly="artist"
-          onTagSelect={handleTagSelect}
-          onClose={() => {}}
-          onVideoUrlSubmit={() => {}}
-        />
-
-        {/* バリデーション表示（artistDbIds 側に寄せてまとめて出す） */}
-        {fieldErrors.get('artistDbIds')?.map((e, i) => (
-          <p key={i} className="mt-1 text-xs text-red-600">
-            {e.message} <span className="opacity-60">[{e.code}]</span>
-          </p>
-        ))}
+        <TagSearch searchOnly="artist" onTagSelect={handleTagSelect} onClose={() => {}} onVideoUrlSubmit={() => {}} />
 
         {!hasAtLeastOneArtist && (
           <p className="mt-1 text-xs text-amber-600">最低1組以上のアーティストを選択してください。</p>
@@ -277,24 +221,13 @@ export default function NewLiveForm({ venues }: { venues: string[] }) {
           会場 <span className="text-red-500">*</span>
         </label>
         <input
-          id="venue"
-          name="venue"
-          required
-          aria-invalid={hasErr('venue')}
-          className={clsx(
-            'w-full rounded-md border p-2 shadow-sm',
-            hasErr('venue') ? 'border-red-300 focus:border-red-400' : 'border-gray-300'
-          )}
+          id="venue" name="venue" required aria-invalid={hasErr('venue')}
+          className={clsx('w-full rounded-md border p-2 shadow-sm', hasErr('venue') ? 'border-red-300 focus:border-red-400' : 'border-gray-300')}
           list="venue-list"
         />
         <datalist id="venue-list">
           {venues.map((v) => <option key={v} value={v} />)}
         </datalist>
-        {fieldErrors.get('venue')?.map((e, i) => (
-          <p key={i} className="mt-1 text-xs text-red-600">
-            {e.message} <span className="opacity-60">[{e.code}]</span>
-          </p>
-        ))}
       </div>
 
       {/* 日付 */}
@@ -303,35 +236,16 @@ export default function NewLiveForm({ venues }: { venues: string[] }) {
           公演日 <span className="text-red-500">*</span>
         </label>
         <input
-          id="date"
-          name="date"
-          type="date"
-          required
-          aria-invalid={hasErr('date')}
-          className={clsx(
-            'w-full rounded-md border p-2 shadow-sm',
-            hasErr('date') ? 'border-red-300 focus:border-red-400' : 'border-gray-300'
-          )}
+          id="date" name="date" type="date" required aria-invalid={hasErr('date')}
+          className={clsx('w-full rounded-md border p-2 shadow-sm', hasErr('date') ? 'border-red-300 focus:border-red-400' : 'border-gray-300')}
         />
-        {fieldErrors.get('date')?.map((e, i) => (
-          <p key={i} className="mt-1 text-xs text-red-600">
-            {e.message} <span className="opacity-60">[{e.code}]</span>
-          </p>
-        ))}
       </div>
 
       {/* 説明（任意） */}
       <div>
-        <label htmlFor="description" className="mb-1 block text-sm font-medium text-gray-700">
-          説明
-        </label>
-        <textarea
-          id="description"
-          name="description"
-          rows={4}
-          className="w-full rounded-md border border-gray-300 p-2 shadow-sm"
-          placeholder="イベントの詳細メモなど"
-        />
+        <label htmlFor="description" className="mb-1 block text-sm font-medium text-gray-700">説明</label>
+        <textarea id="description" name="description" rows={4}
+          className="w-full rounded-md border border-gray-300 p-2 shadow-sm" placeholder="イベントの詳細メモなど" />
       </div>
 
       <SubmitButton />
