@@ -1,77 +1,162 @@
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { z } from 'zod'
+import { createClient } from '@/lib/supabase/server' // ← 既存のサーバー用ヘルパを想定（App Router から呼ぶ）
 
-// (toggleAttendance関数は、live_artistsテーブルと無関係なので変更なし)
+type LiveActionIssue = { field: string; code: string; message: string }
+type LiveActionState = { error?: string; success?: string; errors?: LiveActionIssue[] } | null
+
+// 形式チェック
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const SPOTIFY_ID_RE = /^[0-9A-Za-z]{22}$/
+
+const FormSchema = z.object({
+  name: z.string().min(1, 'ライブ名は必須です'),
+  venue: z.string().min(1, '会場は必須です'),
+  date: z.string().regex(DATE_RE, '日付は YYYY-MM-DD 形式で入力してください'),
+  description: z.string().optional().default(''),
+  artistDbIds: z.array(z.string().regex(UUID_RE)).optional().default([]),
+  artistSpotifyIds: z.array(z.string().regex(SPOTIFY_ID_RE)).optional().default([]),
+  // 補助（spotifyIds と同じ順序で送る）
+  artistNames: z.array(z.string()).optional().default([]),
+  artistImages: z.array(z.string()).optional().default([]),
+}).refine(
+  (v) => (v.artistDbIds?.length ?? 0) + (v.artistSpotifyIds?.length ?? 0) > 0,
+  { path: ['artistDbIds'], message: 'アーティストを1組以上選択してください' }
+)
+
 export async function toggleAttendance(liveId: number) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'ログインが必要です。' }
 
-  const { data: existingAttendance } = await supabase.from('attended_lives').select('id').eq('user_id', user.id).eq('live_id', liveId).single()
+  const { data: existing } = await supabase
+    .from('attended_lives_v2')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('live_id', liveId)
+    .maybeSingle()
 
-  if (existingAttendance) {
-    const { error } = await supabase.from('attended_lives').delete().eq('id', existingAttendance.id)
+  if (existing) {
+    const { error } = await supabase.from('attended_lives_v2').delete().eq('id', existing.id)
     if (error) return { error: '参加の取り消しに失敗しました。' }
-    revalidatePath('/live'); revalidatePath(`/${user.id}`);
+    revalidatePath('/live'); revalidatePath(`/${user.id}`)
     return { success: true, attended: false }
   } else {
-    const { error } = await supabase.from('attended_lives').insert({ user_id: user.id, live_id: liveId })
+    const { error } = await supabase.from('attended_lives_v2').insert({ user_id: user.id, live_id: liveId })
     if (error) return { error: '参加記録の追加に失敗しました。' }
-    revalidatePath('/live'); revalidatePath(`/${user.id}`);
+    revalidatePath('/live'); revalidatePath(`/${user.id}`)
     return { success: true, attended: true }
   }
 }
 
-// ▼▼▼【重要】このcreateLive関数を、本来のシンプルな形に戻します ▼▼▼
-export async function createLive(previousState: { error: string } | null, formData: FormData) {
+export async function createLive(
+  _prev: LiveActionState,
+  formData: FormData
+): Promise<LiveActionState> {
   const supabase = createClient()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
+  // 認証
+  const { data: auth, error: authErr } = await supabase.auth.getUser()
+  if (authErr || !auth?.user?.id) {
     return { error: 'ライブを登録するにはログインが必要です。' }
   }
-  
-  const name = formData.get('name') as string
-  const artistId = formData.get('artistId') as string
-  const artistName = formData.get('artistName') as string
-  const artistImageUrl = formData.get('artistImageUrl') as string | null
-  const venue = formData.get('venue') as string
-  const date = formData.get('date') as string
+  const profiles_id = auth.user.id
 
-  if (!name || !artistId || !artistName || !venue || !date) {
-    return { error: 'すべてのフィールドを入力してください。' }
+  // 受信 & 検証
+  const raw = {
+    name: String(formData.get('name') ?? ''),
+    venue: String(formData.get('venue') ?? ''),
+    date: String(formData.get('date') ?? ''),
+    description: formData.get('description') ? String(formData.get('description')) : '',
+    artistDbIds: formData.getAll('artistDbIds[]').map(String),
+    artistSpotifyIds: formData.getAll('artistSpotifyIds[]').map(String),
+    artistNames: formData.getAll('artistNames[]').map(String),
+    artistImages: formData.getAll('artistImages[]').map(String),
+  }
+  const parsed = FormSchema.safeParse(raw)
+  if (!parsed.success) {
+    const errors: LiveActionIssue[] = parsed.error.issues.map((i) => ({
+      field: i.path.join('.') || '(form)',
+      code: i.code,
+      message: i.message,
+    }))
+    return { error: '入力値が不正です', errors }
   }
 
-  try {
-    // 1. アーティスト情報を artists テーブルに登録（または更新）
-    const { error: artistError } = await supabase
-      .from('artists')
-      .upsert({
-        id: artistId,
-        name: artistName,
-        image_url: artistImageUrl,
-      }, { onConflict: 'id' })
-    if (artistError) throw artistError
+  const { name, venue, date, description, artistDbIds, artistSpotifyIds, artistNames, artistImages } =
+    parsed.data
 
-    // 2. ライブ情報を lives テーブルに登録 (artist_id を含める)
-    const { error: liveError } = await supabase
-      .from('lives')
-      .insert({
-        name: name,
-        venue: venue,
-        live_date: date,
-        created_by: user.id,
-        artist_id: artistId, // artist_id を lives テーブルに直接保存
-      })
-    if (liveError) throw liveError
+  // 1) 既存DBのUUIDはそのまま採用
+  const existingIds = [...new Set(artistDbIds)]
 
-  } catch (error) {
-    console.error('Create live error:', error)
-    const message = error instanceof Error ? error.message : 'ライブの登録中に予期せぬエラーが発生しました。'
-    return { error: message }
+  // 2) Spotify経由の新規は upsert して UUID を得る（順序を合わせる）
+  const newIds: string[] = []
+  for (let i = 0; i < artistSpotifyIds.length; i++) {
+    const sid = artistSpotifyIds[i]
+    const nm = artistNames[i] ?? null
+    const img = artistImages[i] ?? null
+
+    // 既存チェック（spotify_id 一意）
+    const { data: found, error: findErr } = await supabase
+      .from('artists_v2')
+      .select('id')
+      .eq('spotify_id', sid)
+      .maybeSingle()
+    if (findErr) return { error: findErr.message ?? 'アーティスト照会に失敗しました。' }
+
+    if (found?.id) {
+      newIds.push(found.id)
+    } else {
+      // upsert（spotify_id UNIQUE を想定）
+      const { data: inserted, error: upErr } = await supabase
+        .from('artists_v2')
+        .upsert({ spotify_id: sid, name: nm ?? sid, image_url: img }, { onConflict: 'spotify_id' })
+        .select('id')
+        .single()
+      if (upErr || !inserted?.id) {
+        return { error: upErr?.message ?? 'アーティストの作成に失敗しました。' }
+      }
+      newIds.push(inserted.id)
+    }
+  }
+
+  const finalArtistIds = Array.from(new Set([...existingIds, ...newIds]))
+  if (finalArtistIds.length === 0) {
+    return {
+      error: '入力値が不正です',
+      errors: [{ field: 'artistDbIds', code: 'too_small', message: 'アーティストを1組以上選択してください' }],
+    }
+  }
+
+  // 3) lives_v2 を作成
+  const { data: liveRow, error: liveErr } = await supabase
+    .from('lives_v2')
+    .insert({
+      name,
+      venue,
+      live_date: date,
+      description: description || null,
+      profiles_id,
+    })
+    .select('id')
+    .single()
+
+  if (liveErr || !liveRow?.id) {
+    return { error: liveErr?.message ?? 'ライブの作成に失敗しました。' }
+  }
+  const liveId: number = liveRow.id as number
+
+  // 4) live_artists に紐付けをまとめて登録
+  const links = finalArtistIds.map((artist_id) => ({ live_id: liveId, artist_id }))
+  const { error: linkErr } = await supabase.from('live_artists').insert(links)
+  if (linkErr) {
+    // ロールバック
+    await supabase.from('lives_v2').delete().eq('id', liveId)
+    return { error: linkErr.message ?? 'ライブ-アーティスト関連の作成に失敗しました。' }
   }
 
   revalidatePath('/live')
