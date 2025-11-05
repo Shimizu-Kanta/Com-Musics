@@ -32,10 +32,11 @@ type GroupedLives = {
 
 export const dynamic = 'force-dynamic'
 
-type PageProps = { searchParams?: { q?: string } }
+type PageProps = { searchParams?: Promise<{ q?: string }> }
 
 export default async function LivePage({ searchParams }: PageProps) {
-  const query = searchParams?.q ?? ''
+  const sp = searchParams ? await searchParams : undefined
+  const query = sp?.q ?? ''
 
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
