@@ -2,13 +2,10 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
+import type { Tag } from '@/app/(main)/post/actions'
 import { saveVideoAndCreateTag } from './videoActions'
-import type { Tag } from './TagSearch'
-// ▼▼▼ /admin フォルダから、完成させた検索コンポーネントをインポート ▼▼▼
-import ArtistSearch from '../../app/(main)/admin/add-video/ArtistSearch'
-import SongSearch from '../../app/(main)/admin/add-video/SongSearch'
+import MusicSearch from './MusicSearch'
 
-// CreatePostForm から渡される一時データの型
 type PendingVideoData = {
   youtube_video_id: string
   title: string
@@ -22,76 +19,46 @@ interface VideoTagModalProps {
   onClose: () => void
 }
 
-export default function VideoTagModal({
-  videoData,
-  onVideoTagSelect,
-  onClose,
-}: VideoTagModalProps) {
+export default function VideoTagModal({ videoData, onVideoTagSelect, onClose }: VideoTagModalProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // フォームの入力値を管理
   const [videoType, setVideoType] = useState('')
-  const [selectedArtistId, setSelectedArtistId] = useState('')
-  const [selectedSongId, setSelectedSongId] = useState('')
+  const [artistSpotifyId, setArtistSpotifyId] = useState('')
+  const [songQuery, setSongQuery] = useState('')
+  const [songTrackId, setSongTrackId] = useState('')
 
-  // フォーム送信
   const handleSubmit = async (formData: FormData) => {
-    setIsLoading(true)
-    setError(null)
+    setIsLoading(true); setError(null)
 
-    // 隠しフィールドと state の値を FormData に追加
     formData.set('youtube_video_id', videoData.youtube_video_id)
     formData.set('title', videoData.title)
     formData.set('thumbnail_url', videoData.thumbnail_url)
     formData.set('youtube_category_id', videoData.youtube_category_id)
     formData.set('video_type', videoType)
-    formData.set('artist_id', selectedArtistId)
-    formData.set('original_song_id', selectedSongId)
-    
-    // アクションを実行
-    const result = await saveVideoAndCreateTag(formData)
 
-    if (result.error) {
-      setError(result.error)
-      setIsLoading(false)
-    } else if (result.tag) {
-      // 成功！「管制塔」に完成したタグを渡す
-      onVideoTagSelect(result.tag)
-    }
+    if (artistSpotifyId) formData.set('artistSpotifyId', artistSpotifyId)
+    if (songTrackId) formData.set('songSpotifyTrackId', songTrackId)
+
+    const result = await saveVideoAndCreateTag(formData)
+    if (result.error) { setError(result.error); setIsLoading(false); return }
+    if (result.tag) onVideoTagSelect(result.tag)
   }
 
   return (
     <form action={handleSubmit} className="space-y-4">
-      <h2 className="text-lg font-bold">動画の詳細情報を入力</h2>
+      <h2 className="text-lg font-bold">動画の詳細情報</h2>
 
-      {/* 1. 取得した動画情報のプレビュー */}
       <div className="flex items-center space-x-4 p-2 border rounded-md bg-gray-50">
-        <Image
-          src={videoData.thumbnail_url}
-          alt={videoData.title}
-          width={80}
-          height={60}
-          className="rounded-md"
-        />
+        <Image src={videoData.thumbnail_url} alt={videoData.title} width={80} height={60} className="rounded-md" />
         <div className="flex-1">
           <p className="font-semibold text-sm line-clamp-2">{videoData.title}</p>
         </div>
       </div>
 
-      {/* 2. 動画カテゴリの選択 (必須) */}
       <div>
-        <label htmlFor="video_type" className="block text-sm font-medium text-gray-700">
-          動画カテゴリ (必須)
-        </label>
-        <select
-          id="video_type"
-          name="video_type"
-          required
-          value={videoType}
-          onChange={(e) => setVideoType(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2"
-        >
+        <label htmlFor="video_type" className="block text-sm font-medium text-gray-700">動画カテゴリ (必須)</label>
+        <select id="video_type" name="video_type" required value={videoType} onChange={(e) => setVideoType(e.target.value)} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2">
           <option value="">選択してください...</option>
           <option value="original_song">原曲</option>
           <option value="cover">歌ってみた</option>
@@ -99,44 +66,26 @@ export default function VideoTagModal({
         </select>
       </div>
 
-      {/* 3. アーティスト検索 (必須) */}
-      <ArtistSearch onArtistSelect={setSelectedArtistId} />
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700">Spotify アーティストID（任意）</label>
+        <input className="w-full rounded-md border p-2" placeholder="22桁のIDまたはURL" value={artistSpotifyId} onChange={(e) => setArtistSpotifyId(e.target.value)} />
+      </div>
 
-      {/* 4. 原曲検索 (オプショナル) */}
-      {/* あなたの設計通り、原曲(YouTube)の検索は削除し、
-        原曲(Spotify)の検索のみに絞っています。
-      */}
-      <SongSearch
-        onSongSelect={handleSongSelect}
-        value={selectedSongId}
-      />
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-gray-700">楽曲（Spotify検索・任意）</label>
+        <input className="w-full rounded-md border p-2" placeholder="曲名で検索" value={songQuery} onChange={(e) => setSongQuery(e.target.value)} />
+        {songQuery && <MusicSearch value={songQuery} onPick={(tid) => setSongTrackId(tid)} />}
+        {songTrackId && <p className="text-xs text-gray-500">選択中のトラックID: {songTrackId}</p>}
+      </div>
 
       {error && <p className="text-red-500 text-sm">{error}</p>}
 
-      {/* 5. 送信ボタン */}
-      <div className="flex justify-end space-x-2 pt-4">
-        <button
-          type="button"
-          onClick={onClose}
-          className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md"
-        >
-          キャンセル
-        </button>
-        <button
-          type="submit"
-          disabled={isLoading || !videoType || !selectedArtistId} // 必須項目をチェック
-          className="bg-red-600 text-white px-4 py-2 rounded-md disabled:bg-gray-400"
-        >
-          {isLoading ? '保存中...' : 'この動画をタグ付け'}
+      <div className="flex justify-end gap-2 pt-4">
+        <button type="button" onClick={onClose} className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md">キャンセル</button>
+        <button type="submit" disabled={isLoading || !videoType} className="bg-red-600 text-white px-4 py-2 rounded-md disabled:bg-gray-400">
+          {isLoading ? '保存中...' : 'この動画をタグ候補に追加'}
         </button>
       </div>
     </form>
   )
-  
-  // 原曲(Spotify)が選ばれたら、もう片方(YouTube原曲、今回は存在しない)をクリアする
-  // (ロジックは /admin と同じ)
-  function handleSongSelect(songId: string) {
-    setSelectedSongId(songId)
-    // (もし将来的にYouTube原曲検索を復活させるなら、ここでクリア処理)
-  }
 }

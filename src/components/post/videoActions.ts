@@ -1,327 +1,197 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { z } from 'zod'
-// TagSearch.tsx から Tag 型をインポート
-import type { Tag } from './TagSearch'
-// TagSearch.tsx が使っている既存のSpotify検索アクションをインポート
-import { searchMusic, searchArtistsAction} from '@/app/(main)/post/actions'
+import type { Tag } from '@/app/(main)/post/actions'
 
-// 1. YouTube API (videos.list) のための型定義
-interface YouTubeVideoListResponse {
-  items: {
-    id: string
-    snippet: {
-      title: string
-      thumbnails: { medium: { url: string } }
-      categoryId: string
-    }
-  }[]
-  error?: { message: string }
-}
+const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID ?? ''
+const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET ?? ''
+const YT_API_KEY = process.env.YOUTUBE_API_KEY ?? ''
 
-// 2. 「管制塔」に渡す、一時データの型
-type PendingVideoData = {
-  youtube_video_id: string
-  title: string
-  thumbnail_url: string
-  youtube_category_id: string
-}
+const SPOTIFY_ID_22 = /^[0-9A-Za-z]{22}$/
 
-/**
- * YouTubeのURLを解析して動画IDを抽出する
- */
-function extractVideoId(url: string): string | null {
-  try {
-    const urlObj = new URL(url)
-    if (urlObj.hostname === 'youtu.be') {
-      return urlObj.pathname.slice(1)
-    }
-    if (urlObj.hostname.includes('youtube.com')) {
-      const videoId = urlObj.searchParams.get('v')
-      if (videoId) return videoId
-    }
-    return null
-  } catch {
-    return null
-  }
-}
+type Result = { error?: string; tag?: Tag }
 
-/**
- * アクション1: URLから動画情報を取得する
- */
-export async function getVideoInfo(
-  url: string,
-): Promise<{ data?: PendingVideoData; error?: string }> {
-  // ... (この関数は変更ありません) ...
-  const youtube_video_id = extractVideoId(url)
-  if (!youtube_video_id) {
-    return { error: '有効なYouTubeのURLを解析できませんでした。' }
-  }
-  const supabase = createClient()
-  const { data: existingVideo, error: dbError } = await supabase
-    .from('videos_test')
-    .select('title, thumbnail_url, youtube_category_id')
-    .eq('youtube_video_id', youtube_video_id)
-    .single()
-  if (dbError && dbError.code !== 'PGRST116') {
-    return { error: `DB検索エラー: ${dbError.message}` }
-  }
-  if (existingVideo) {
-    return {
-      data: {
-        youtube_video_id,
-        title: existingVideo.title,
-        thumbnail_url: existingVideo.thumbnail_url || '',
-        youtube_category_id: existingVideo.youtube_category_id || '',
-      },
-    }
-  }
-  const apiKey = process.env.YOUTUBE_API_KEY
-  if (!apiKey) {
-    return { error: 'YouTube APIキーが設定されていません。' }
-  }
-  const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${youtube_video_id}&key=${apiKey}`
-  try {
-    const response = await fetch(apiUrl)
-    const data: YouTubeVideoListResponse = await response.json()
-    if (data.error || data.items.length === 0) {
-      return { error: `APIエラー: ${data.error?.message || '動画が見つかりません'}` }
-    }
-    const item = data.items[0]
-    return {
-      data: {
-        youtube_video_id,
-        title: item.snippet.title,
-        thumbnail_url: item.snippet.thumbnails.medium.url,
-        youtube_category_id: item.snippet.categoryId,
-      },
-    }
-  } catch (err: unknown) {
-    if (err instanceof Error) {
-      return { error: `APIリクエストエラー: ${err.message}` }
-    }
-    return { error: '不明なAPIエラー' }
-  }
-}
-
-/**
- * アクション2: 動画をDBに保存し、完成した「タグ」を返す
- */
-// ... (videoSchema と VideoWithArtist の型定義は変更ありません) ...
-const videoSchema = z.object({
-  youtube_video_id: z.string(),
-  title: z.string(),
-  thumbnail_url: z.string(),
-  youtube_category_id: z.string(),
-  video_type: z.enum(['original_song', 'cover', 'live_performance']),
-  artist_id: z.string().uuid().nullable(),
-  original_song_id: z.string().uuid().nullable(),
-})
-type VideoWithArtist = {
-  id: string
-  artists_test: { name: string }[] | null
-}
-
-export async function saveVideoAndCreateTag(
-  formData: FormData,
-): Promise<{ tag?: Tag; error?: string }> {
-  // ... (この関数の前半（videoの取得まで）は変更ありません) ...
-  const validatedFields = videoSchema.safeParse({
-    youtube_video_id: formData.get('youtube_video_id'),
-    title: formData.get('title'),
-    thumbnail_url: formData.get('thumbnail_url'),
-    youtube_category_id: formData.get('youtube_category_id'),
-    video_type: formData.get('video_type'),
-    artist_id: formData.get('artist_id') || null,
-    original_song_id: formData.get('original_song_id') || null,
-  })
-  if (!validatedFields.success) {
-    return { error: `入力が無効です: ${validatedFields.error.flatten().fieldErrors}` }
-  }
-  if (!validatedFields.data.artist_id) {
-    return { error: 'アーティストは必須です。' }
-  }
-  const supabase = createClient()
-  const { data: initialVideo, error } = await supabase
-    .from('videos_test')
-    .select('id, artists_test(name)')
-    .eq('youtube_video_id', validatedFields.data.youtube_video_id)
-    .single<VideoWithArtist>()
-  if (error && error.code !== 'PGRST116') {
-    return { error: `DB検索エラー: ${error.message}` }
-  }
-  let video: VideoWithArtist | null = initialVideo
-  if (!video) {
-    const { data: newVideo, error: insertError } = await supabase
-      .from('videos_test')
-      .insert({
-        youtube_video_id: validatedFields.data.youtube_video_id,
-        title: validatedFields.data.title,
-        thumbnail_url: validatedFields.data.thumbnail_url,
-        youtube_category_id: validatedFields.data.youtube_category_id,
-        video_type: validatedFields.data.video_type,
-        artist_id: validatedFields.data.artist_id,
-        original_song_id: validatedFields.data.original_song_id,
-      })
-      .select('id, artists_test(name)')
-      .single<VideoWithArtist>()
-    if (insertError) {
-      return { error: `DB保存エラー: ${insertError.message}` }
-    }
-    video = newVideo
-  }
-  if (!video) {
-    return { error: '動画の登録または取得に失敗しました。' }
-  }
-  return {
-    tag: {
-      type: 'video',
-      id: video.id,
-      name: validatedFields.data.title,
-      imageUrl: validatedFields.data.thumbnail_url,
-      artistName: video.artists_test?.[0]?.name || '不明',
-      artistId: validatedFields.data.artist_id,
-      youtube_video_id: validatedFields.data.youtube_video_id,
-    },
-  }
-}
-
-// ▼▼▼ ここからが「Get or Create」の新機能 ▼▼▼
-
-/**
- * アクション3: Spotifyアーティストを検索する
- */
-export async function searchSpotifyArtists(query: string) {
-  // ... (この関数は変更ありません) ...
-  if (query.length < 2) return []
-  return searchArtistsAction(query)
-}
-
-/**
- * アクション4: Spotifyの曲を検索する
- */
-export async function searchSpotifySongs(query: string) {
-  // ... (この関数は変更ありません) ...
-  if (query.length < 2) return []
-  return searchMusic(query)
-}
-
-// ... (SpotifyArtist と SpotifySong の型定義は変更ありません) ...
-type SpotifyArtist = {
+type SpotifyTokenRes = { access_token: string }
+type SpotifyArtist = { id: string; name: string; images?: { url: string; width?: number }[] }
+type SpotifyTrack = {
   id: string
   name: string
-  imageUrl?: string
-}
-type SpotifySong = {
-  id: string
-  name: string
-  artist: string
-  artistId: string
-  albumArtUrl?: string
+  album?: { images?: { url: string; width?: number }[] }
+  artists: { id: string; name: string }[]
 }
 
-/**
- * アクション5: Get or Create (アーティスト編)
- */
-export async function getOrCreateArtist(
-  artist: SpotifyArtist,
-): Promise<{ id: string; name: string } | { error: string }> {
-  // ... (この関数は変更ありません) ...
-  const supabase = createClient()
-  const { data: existing, error: findError } = await supabase
-    .from('artists_test')
-    .select('id, name')
-    .eq('spotify_id', artist.id)
-    .single()
-  if (findError && findError.code !== 'PGRST116') {
-    return { error: `DB検索エラー: ${findError.message}` }
+type YtVideoItem = {
+  id?: string
+  snippet?: {
+    title?: string
+    categoryId?: string
+    thumbnails?: {
+      maxres?: { url?: string }
+      standard?: { url?: string }
+      high?: { url?: string }
+      medium?: { url?: string }
+      default?: { url?: string }
+    }
   }
-  if (existing) {
-    return existing
-  }
-  const { data: newArtist, error: insertError } = await supabase
-    .from('artists_test')
-    .insert({
-      name: artist.name,
-      spotify_id: artist.id,
-      image_url: artist.imageUrl,
-    })
-    .select('id, name')
-    .single()
-  if (insertError) {
-    return { error: `アーティスト登録エラー: ${insertError.message}` }
-  }
-  return newArtist
 }
 
-/**
- * アクション6: Get or Create (楽曲編)
- */
-export async function getOrCreateSong(
-  song: SpotifySong,
-): Promise<{ id: string } | { error: string }> {
-  const supabase = createClient()
-
-  // 1. Spotify IDで既存の曲を検索
-  const { data: existing, error: findError } = await supabase
-    .from('songs_test')
-    .select('id')
-    .eq('spotify_id', song.id)
-    .single()
-
-  if (findError && findError.code !== 'PGRST116') {
-    return { error: `DB検索エラー: ${findError.message}` }
-  }
-  if (existing) {
-    return existing // 存在したら、そのIDを返す
-  }
-
-  // ▼▼▼【重要】ここが今回の修正点です ▼▼▼
-  
-  // 2. 存在しない場合、まず「アーティスト」のUUIDを取得 (Get or Create)
-  const artistResult = await getOrCreateArtist({
-    id: song.artistId,
-    name: song.artist,
-    // (曲検索からはアーティスト画像が取れない)
+/* ========== Spotify helpers ========== */
+async function getSpotifyToken(): Promise<string> {
+  if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) throw new Error('Spotifyクレデンシャル未設定')
+  const basic = Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64')
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: { Authorization: `Basic ${basic}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'client_credentials' }),
+    cache: 'no-store',
   })
+  if (!res.ok) throw new Error('Spotify token取得失敗')
+  const json = (await res.json()) as SpotifyTokenRes
+  return json.access_token
+}
+async function fetchSpotifyArtist(id: string, token: string): Promise<SpotifyArtist | null> {
+  const res = await fetch(`https://api.spotify.com/v1/artists/${id}`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })
+  return res.ok ? ((await res.json()) as SpotifyArtist) : null
+}
+async function fetchSpotifyTrack(id: string, token: string): Promise<SpotifyTrack | null> {
+  const res = await fetch(`https://api.spotify.com/v1/tracks/${id}`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })
+  return res.ok ? ((await res.json()) as SpotifyTrack) : null
+}
+function extractSpotifyId(input: string): string | null {
+  const s = input.trim()
+  if (!s) return null
+  if (SPOTIFY_ID_22.test(s)) return s
+  try {
+    const u = new URL(s)
+    const parts = u.pathname.split('/').filter(Boolean) // /track/{id} or /artist/{id}
+    const maybe = parts[1]
+    return SPOTIFY_ID_22.test(maybe ?? '') ? (maybe as string) : null
+  } catch { return null }
+}
+async function ensureArtistBySpotifyId(spotifyId: string, token: string): Promise<string> {
+  const supabase = createClient()
+  { const { data } = await supabase.from('artists_v2').select('id').eq('spotify_id', spotifyId).maybeSingle(); if (data?.id) return data.id }
+  const art = await fetchSpotifyArtist(spotifyId, token)
+  if (!art) throw new Error('Spotifyアーティスト取得失敗')
+  const img = (art.images ?? []).sort((a, b) => (b.width ?? 0) - (a.width ?? 0))[0]?.url ?? null
+  const { data, error } = await supabase.from('artists_v2').upsert({ spotify_id: art.id, name: art.name, image_url: img }, { onConflict: 'spotify_id' }).select('id').single()
+  if (error || !data?.id) throw new Error(error?.message ?? 'artists_v2 upsert失敗')
+  return data.id
+}
+async function ensureSongBySpotifyTrackId(trackId: string, token: string): Promise<string> {
+  const supabase = createClient()
+  { const { data } = await supabase.from('songs_v2').select('id').eq('spotify_id', trackId).maybeSingle(); if (data?.id) return data.id }
+  const tr = await fetchSpotifyTrack(trackId, token)
+  if (!tr) throw new Error('Spotifyトラック取得失敗')
+  const cover = (tr.album?.images ?? []).sort((a, b) => (b.width ?? 0) - (a.width ?? 0))[0]?.url ?? null
+  const { data, error } = await supabase.from('songs_v2').upsert({ spotify_id: tr.id, title: tr.name, image_url: cover }, { onConflict: 'spotify_id' }).select('id').single()
+  if (error || !data?.id) throw new Error(error?.message ?? 'songs_v2 upsert失敗')
+  const songId = data.id as string
+  for (const a of tr.artists) {
+    const aid = await ensureArtistBySpotifyId(a.id, token)
+    await supabase.from('song_artists').upsert({ song_id: songId, artist_id: aid }, { onConflict: 'song_id,artist_id' })
+  }
+  return songId
+}
 
-  // 2B. エラーチェックを先に行う
-  if ('error' in artistResult) {
-    return { error: artistResult.error }
+/* ========== YouTube helpers ========== */
+async function fetchYouTubeVideo(id: string): Promise<{ title: string; categoryId: string | null; thumbnail: string | null } | null> {
+  if (!YT_API_KEY) throw new Error('YouTube APIキー未設定')
+  const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${encodeURIComponent(id)}&key=${YT_API_KEY}`
+  const res = await fetch(url, { cache: 'no-store' })
+  if (!res.ok) return null
+  const j = (await res.json()) as { items?: YtVideoItem[] }
+  const it = j.items?.[0]
+  if (!it?.snippet?.title) return null
+  const sn = it.snippet
+  const thumb =
+    sn.thumbnails?.maxres?.url ??
+    sn.thumbnails?.standard?.url ??
+    sn.thumbnails?.high?.url ??
+    sn.thumbnails?.medium?.url ??
+    sn.thumbnails?.default?.url ??
+    null
+  return { title: sn.title ?? id, categoryId: sn.categoryId ?? null, thumbnail: thumb }
+}
+
+/* ========== メイン：動画保存＋中間テーブル＋タグ返却 ========== */
+export async function saveVideoAndCreateTag(formData: FormData): Promise<Result> {
+  const supabase = createClient()
+  const { data: auth } = await supabase.auth.getUser()
+  if (!auth?.user?.id) return { error: 'ログインが必要です。' }
+
+  const youtube_video_id = String(formData.get('youtube_video_id') ?? '')
+  const video_type = String(formData.get('video_type') ?? '')
+
+  const artistSpotifyIdRaw = String(formData.get('artistSpotifyId') ?? '')
+  const songSpotifyTrackIdRaw = String(formData.get('songSpotifyTrackId') ?? '')
+
+  if (!youtube_video_id || !video_type) return { error: '必要な項目が不足しています。' }
+
+  // YouTube メタデータを取得（常に正値で保存）
+  const meta = await fetchYouTubeVideo(youtube_video_id)
+  if (!meta) return { error: 'YouTube動画情報の取得に失敗しました。' }
+  const title = meta.title
+  const thumbnail_url = meta.thumbnail ?? null
+  const youtube_category_id = meta.categoryId ?? null
+
+  // videos を作成/取得（既存があれば最新メタで更新）
+  const { data: existing } = await supabase.from('videos').select('id').eq('youtube_video_id', youtube_video_id).maybeSingle()
+  let videoId: string
+  if (existing?.id) {
+    videoId = existing.id as string
+    await supabase.from('videos').update({ title, thumbnail_url, youtube_category_id }).eq('id', videoId)
+  } else {
+    const { data: videoRow, error: vErr } = await supabase
+      .from('videos')
+      .insert({ title, youtube_video_id, thumbnail_url, video_type, youtube_category_id })
+      .select('id')
+      .single()
+    if (vErr || !videoRow?.id) return { error: vErr?.message ?? '動画の作成に失敗しました。' }
+    videoId = videoRow.id as string
   }
 
-  // 2C. エラーがないことを確認してから、id を取り出す
-  const artistUuid = artistResult.id
-  
-  // ▲▲▲
+  // 任意：アーティスト/楽曲の中間テーブル（各1件、sort_order=0）に紐付け
+  const needSpotify = !!artistSpotifyIdRaw || !!songSpotifyTrackIdRaw
+  const token = needSpotify ? await getSpotifyToken() : ''
 
-  // 3. 曲を新規作成
-  const { data: newSong, error: insertSongError } = await supabase
-    .from('songs_test')
-    .insert({
-      title: song.name,
-      spotify_id: song.id,
-      image_url: song.albumArtUrl,
-    })
-    .select('id')
-    .single()
-
-  if (insertSongError || !newSong) {
-    return { error: `曲登録エラー: ${insertSongError?.message || '不明なエラー'}` }
+  if (artistSpotifyIdRaw) {
+    const sid = extractSpotifyId(artistSpotifyIdRaw)
+    if (sid) {
+      const artistUuid = await ensureArtistBySpotifyId(sid, token)
+      const { data: exists } = await supabase
+        .from('video_artists')
+        .select('video_id')
+        .eq('video_id', videoId)
+        .eq('artist_id', artistUuid)
+        .maybeSingle()
+      if (!exists) {
+        await supabase
+          .from('video_artists')
+          .upsert({ video_id: videoId, artist_id: artistUuid, role: 'primary', sort_order: 0 }, { onConflict: 'video_id,artist_id' })
+      }
+    }
   }
 
-  // 4. 中間テーブル (song_artists_test) に紐付け
-  const { error: junctionError } = await supabase
-    .from('song_artists_test')
-    .insert({
-      song_id: newSong.id,
-      artist_id: artistUuid, // これで artistUuid が安全に使える
-    })
-
-  if (junctionError) {
-    return { error: `中間テーブル登録エラー: ${junctionError.message}` }
+  if (songSpotifyTrackIdRaw) {
+    const tid = extractSpotifyId(songSpotifyTrackIdRaw)
+    if (tid) {
+      const songUuid = await ensureSongBySpotifyTrackId(tid, token)
+      const { data: exists } = await supabase
+        .from('video_songs')
+        .select('video_id')
+        .eq('video_id', videoId)
+        .eq('song_id', songUuid)
+        .maybeSingle()
+      if (!exists) {
+        await supabase
+          .from('video_songs')
+          .upsert({ video_id: videoId, song_id: songUuid, sort_order: 0 }, { onConflict: 'video_id,sort_order' })
+      }
+    }
   }
 
-  return newSong
+  // タグ候補を返す（投稿送信時に tags_v2 へ保存される）
+  const tag: Tag = { type: 'video', id: videoId, name: title, imageUrl: thumbnail_url ?? undefined }
+  return { tag }
 }
